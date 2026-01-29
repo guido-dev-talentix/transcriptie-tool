@@ -17,7 +17,7 @@ export default function Home() {
           Ondersteunde formaten: MP3, WAV, M4A, MP4
         </p>
         <p className="mt-1">
-          Maximale bestandsgrootte: 100MB
+          Maximale bestandsgrootte: 100MB (via Vercel Blob Storage)
         </p>
       </div>
     </div>

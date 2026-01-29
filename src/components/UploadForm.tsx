@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { upload } from '@vercel/blob/client'
 
 interface TranscriptResult {
   id: string
@@ -26,51 +27,33 @@ export default function UploadForm() {
     setResult(null)
     setIsUploading(true)
 
-    // Check file size (Vercel Hobby has 4.5MB limit)
-    const MAX_SIZE = 4.5 * 1024 * 1024 // 4.5MB
-    const isProduction = window.location.hostname !== 'localhost'
-
-    if (isProduction && file.size > MAX_SIZE) {
-      setError(
-        `⚠️ Bestand te groot voor Vercel Hobby plan (${(file.size / 1024 / 1024).toFixed(1)}MB > 4.5MB). ` +
-        `Upgrade naar Vercel Pro voor bestanden tot 50MB, of test lokaal met 'npm run dev'.`
-      )
-      setIsUploading(false)
-      return
-    }
-
-    setUploadProgress('Bestand uploaden en transcriberen...')
-
     try {
-      const formData = new FormData()
-      formData.append('file', file)
+      // Step 1: Upload to Vercel Blob (bypasses Vercel function size limit)
+      setUploadProgress('Bestand uploaden naar cloud storage...')
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-upload',
       })
 
-      // Check if response is JSON before parsing
-      const contentType = response.headers.get('content-type')
-      let data
+      console.log('File uploaded to Blob:', blob.url)
 
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json()
-      } else {
-        // Handle non-JSON responses (e.g., server errors, size limit exceeded)
-        const text = await response.text()
-        if (!response.ok) {
-          throw new Error(
-            text.includes('large') || text.includes('size') || text.includes('limit')
-              ? 'Bestand te groot. Upgrade naar Vercel Pro of test lokaal.'
-              : 'Upload mislukt: ' + (text.substring(0, 100) || 'Onbekende fout')
-          )
-        }
-        throw new Error('Onverwachte serverrespons')
-      }
+      // Step 2: Transcribe using the blob URL
+      setUploadProgress('Transcriptie starten...')
+
+      const response = await fetch('/api/transcribe-from-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioUrl: blob.url,
+          filename: file.name,
+        }),
+      })
+
+      const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Upload mislukt')
+        throw new Error(data.error || 'Transcriptie mislukt')
       }
 
       setResult(data)
