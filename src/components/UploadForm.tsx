@@ -25,56 +25,54 @@ export default function UploadForm() {
     setError(null)
     setResult(null)
     setIsUploading(true)
-    setUploadProgress('Bestand uploaden naar AssemblyAI...')
+
+    // Check file size (Vercel Hobby has 4.5MB limit)
+    const MAX_SIZE = 4.5 * 1024 * 1024 // 4.5MB
+    const isProduction = window.location.hostname !== 'localhost'
+
+    if (isProduction && file.size > MAX_SIZE) {
+      setError(
+        `⚠️ Bestand te groot voor Vercel Hobby plan (${(file.size / 1024 / 1024).toFixed(1)}MB > 4.5MB). ` +
+        `Upgrade naar Vercel Pro voor bestanden tot 50MB, of test lokaal met 'npm run dev'.`
+      )
+      setIsUploading(false)
+      return
+    }
+
+    setUploadProgress('Bestand uploaden en transcriberen...')
 
     try {
-      // Step 1: Get upload URL from AssemblyAI via our API
-      const uploadUrlResponse = await fetch('/api/upload-url', {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name }),
+        body: formData,
       })
 
-      if (!uploadUrlResponse.ok) {
-        const error = await uploadUrlResponse.json()
-        throw new Error(error.error || 'Kon upload URL niet ophalen')
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type')
+      let data
+
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json()
+      } else {
+        // Handle non-JSON responses (e.g., server errors, size limit exceeded)
+        const text = await response.text()
+        if (!response.ok) {
+          throw new Error(
+            text.includes('large') || text.includes('size') || text.includes('limit')
+              ? 'Bestand te groot. Upgrade naar Vercel Pro of test lokaal.'
+              : 'Upload mislukt: ' + (text.substring(0, 100) || 'Onbekende fout')
+          )
+        }
+        throw new Error('Onverwachte serverrespons')
       }
 
-      const { uploadUrl } = await uploadUrlResponse.json()
-
-      // Step 2: Upload file directly to AssemblyAI
-      setUploadProgress('Bestand uploaden... (dit kan even duren)')
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-        },
-      })
-
-      if (!uploadResponse.ok) {
-        throw new Error('Upload naar AssemblyAI mislukt')
+      if (!response.ok) {
+        throw new Error(data.error || 'Upload mislukt')
       }
 
-      const audioUrl = await uploadResponse.text()
-
-      // Step 3: Start transcription
-      setUploadProgress('Transcriptie starten...')
-      const transcribeResponse = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          audioUrl,
-          filename: file.name,
-        }),
-      })
-
-      if (!transcribeResponse.ok) {
-        const error = await transcribeResponse.json()
-        throw new Error(error.error || 'Transcriptie starten mislukt')
-      }
-
-      const data = await transcribeResponse.json()
       setResult(data)
       setUploadProgress(null)
     } catch (err) {

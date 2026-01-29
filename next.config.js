@@ -4,7 +4,6 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '100mb',
     },
-    isrMemoryCacheSize: 0, // Disable ISR cache to prevent memory issues with large uploads
   },
 }
 
