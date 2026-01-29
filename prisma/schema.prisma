@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Transcript {
+  id         String   @id @default(cuid())
+  filename   String
+  title      String?  // Custom title for the transcript
+  duration   Int?     // Duration in seconds
+  status     String   @default("pending") // pending, processing, completed, error
+  text       String?  // Full transcription text
+  srt        String?  // SRT subtitle format
+  language   String?  // Detected language
+  assemblyId String?  // AssemblyAI transcript ID
+  error      String?  // Error message if failed
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
