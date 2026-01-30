@@ -1,9 +1,16 @@
+export interface Destination {
+  type: 'slack' | 'gmail'
+  address: string
+}
+
 export async function notifyN8N(data: {
   transcriptId: string
   filename: string
   status: string
+  title?: string
   text?: string
   duration?: number
+  destination?: Destination
 }) {
   const webhookUrl = process.env.N8N_WEBHOOK_URL
 

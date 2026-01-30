@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const unlinked = searchParams.get('unlinked') === 'true'
+
     const transcripts = await prisma.transcript.findMany({
+      where: unlinked ? { projectId: null, status: 'completed' } : undefined,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         filename: true,
+        title: true,
         duration: true,
         status: true,
         language: true,
         createdAt: true,
+        projectId: true,
       },
     })
 

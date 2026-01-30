@@ -8,16 +8,77 @@ datasource db {
 }
 
 model Transcript {
-  id         String   @id @default(cuid())
-  filename   String
-  title      String?  // Custom title for the transcript
-  duration   Int?     // Duration in seconds
-  status     String   @default("pending") // pending, processing, completed, error
-  text       String?  // Full transcription text
-  srt        String?  // SRT subtitle format
-  language   String?  // Detected language
-  assemblyId String?  // AssemblyAI transcript ID
-  error      String?  // Error message if failed
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String       @id @default(cuid())
+  filename    String
+  duration    Int?
+  status      String       @default("pending")
+  text        String?
+  srt         String?
+  language    String?
+  assemblyId  String?
+  error       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  title       String?
+  cleanedText String?
+  projectId   String?
+  summary     String?
+  actionItems ActionItem[]
+  reports     Report[]
+  project     Project?     @relation(fields: [projectId], references: [id])
+}
+
+model Project {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  status      String       @default("active")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  actionItems ActionItem[]
+  reports     Report[]
+  transcripts Transcript[]
+}
+
+model Report {
+  id           String       @id @default(cuid())
+  title        String
+  content      String
+  type         String       @default("meeting")
+  status       String       @default("draft")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  projectId    String
+  transcriptId String?
+  actionItems  ActionItem[]
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  transcript   Transcript?  @relation(fields: [transcriptId], references: [id])
+}
+
+model ActionItem {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  status       String      @default("open")
+  priority     String      @default("medium")
+  assignee     String?
+  dueDate      DateTime?
+  completedAt  DateTime?
+  sourceType   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  projectId    String
+  transcriptId String?
+  reportId     String?
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  report       Report?     @relation(fields: [reportId], references: [id])
+  transcript   Transcript? @relation(fields: [transcriptId], references: [id])
+}
+
+model SavedDestination {
+  id        String   @id @default(cuid())
+  label     String
+  type      String
+  address   String
+  createdAt DateTime @default(now())
 }

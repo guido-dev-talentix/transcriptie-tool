@@ -10,6 +10,11 @@ export async function GET(
     const { id } = await params
     const transcript = await prisma.transcript.findUnique({
       where: { id },
+      include: {
+        project: {
+          select: { id: true, name: true },
+        },
+      },
     })
 
     if (!transcript) {
@@ -39,6 +44,11 @@ export async function GET(
             duration: result.audio_duration ? Math.round(result.audio_duration) : null,
             language: result.language_code,
           },
+          include: {
+            project: {
+              select: { id: true, name: true },
+            },
+          },
         })
 
         return NextResponse.json(updated)
@@ -48,6 +58,11 @@ export async function GET(
           data: {
             status: 'error',
             error: result.error || 'Unknown error',
+          },
+          include: {
+            project: {
+              select: { id: true, name: true },
+            },
           },
         })
 
@@ -71,12 +86,27 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json()
-    const { title } = body
+    const { title, projectId } = body
     const { id } = await params
+
+    const updateData: { title?: string; projectId?: string | null } = {}
+
+    if (title !== undefined) {
+      updateData.title = title
+    }
+
+    if (projectId !== undefined) {
+      updateData.projectId = projectId || null
+    }
 
     const updated = await prisma.transcript.update({
       where: { id },
-      data: { title },
+      data: updateData,
+      include: {
+        project: {
+          select: { id: true, name: true },
+        },
+      },
     })
 
     return NextResponse.json(updated)

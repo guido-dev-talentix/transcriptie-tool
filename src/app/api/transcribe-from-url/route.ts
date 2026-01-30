@@ -12,7 +12,7 @@ export const maxDuration = 300 // 5 minutes for long transcriptions
 
 export async function POST(request: NextRequest) {
   try {
-    const { audioUrl, filename } = await request.json()
+    const { audioUrl, filename, title, projectId } = await request.json()
 
     if (!audioUrl || !filename) {
       return NextResponse.json(
@@ -44,12 +44,14 @@ export async function POST(request: NextRequest) {
     const savedTranscript = await prisma.transcript.create({
       data: {
         filename,
+        title: title || null,
         duration: transcript.audio_duration,
         status: 'completed',
         text: transcript.text,
         srt,
         language: transcript.language_code,
         assemblyId: transcript.id,
+        projectId: projectId || null,
       },
     })
 
@@ -58,6 +60,7 @@ export async function POST(request: NextRequest) {
       assemblyId: transcript.id,
       status: 'completed',
       filename,
+      title: savedTranscript.title,
       text: transcript.text,
       srt,
       duration: transcript.audio_duration,

@@ -42,6 +42,12 @@ export default function RootLayout({
                 >
                   Transcripties
                 </Link>
+                <Link
+                  href="/projects"
+                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Projecten
+                </Link>
               </div>
             </div>
           </div>

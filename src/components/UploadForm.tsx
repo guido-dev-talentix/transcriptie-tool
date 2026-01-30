@@ -1,15 +1,28 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { upload } from '@vercel/blob/client'
 
 interface TranscriptResult {
   id: string
   filename: string
+  title?: string
   text: string
   srt: string
   duration: number
   language: string
+}
+
+interface SavedDestination {
+  id: string
+  label: string
+  type: 'slack' | 'gmail'
+  address: string
+}
+
+interface Project {
+  id: string
+  name: string
 }
 
 export default function UploadForm() {
@@ -21,11 +34,82 @@ export default function UploadForm() {
   const [isCopied, setIsCopied] = useState(false)
   const [isSendingToN8N, setIsSendingToN8N] = useState(false)
   const [n8nSuccess, setN8nSuccess] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  // Title state
+  const [title, setTitle] = useState('')
+
+  // Project state
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+
+  // Destination states
+  const [savedDestinations, setSavedDestinations] = useState<SavedDestination[]>([])
+  const [selectedDestinationId, setSelectedDestinationId] = useState<string>('new')
+  const [newDestinationType, setNewDestinationType] = useState<'slack' | 'gmail'>('slack')
+  const [newDestinationAddress, setNewDestinationAddress] = useState('')
+  const [saveDestination, setSaveDestination] = useState(false)
+  const [newDestinationLabel, setNewDestinationLabel] = useState('')
+  const [isSavingDestination, setIsSavingDestination] = useState(false)
+
+  // Load saved destinations and projects
+  useEffect(() => {
+    fetchSavedDestinations()
+    fetchProjects()
+
+    // Check for projectId in URL
+    const params = new URLSearchParams(window.location.search)
+    const projectId = params.get('projectId')
+    if (projectId) {
+      setSelectedProjectId(projectId)
+    }
+  }, [])
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('/api/projects?status=active')
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch projects:', err)
+    }
+  }
+
+  const fetchSavedDestinations = async () => {
+    try {
+      const response = await fetch('/api/saved-destinations')
+      if (response.ok) {
+        const data = await response.json()
+        setSavedDestinations(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved destinations:', err)
+    }
+  }
+
+  const handleDeleteDestination = async (id: string) => {
+    try {
+      const response = await fetch(`/api/saved-destinations/${id}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        setSavedDestinations(prev => prev.filter(d => d.id !== id))
+        if (selectedDestinationId === id) {
+          setSelectedDestinationId('new')
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete destination:', err)
+    }
+  }
 
   const handleUpload = async (file: File) => {
     setError(null)
     setResult(null)
     setIsUploading(true)
+    setIsExpanded(false)
 
     try {
       // Step 1: Upload to Vercel Blob (bypasses Vercel function size limit)
@@ -47,6 +131,8 @@ export default function UploadForm() {
         body: JSON.stringify({
           audioUrl: blob.url,
           filename: file.name,
+          title: title.trim() || undefined,
+          projectId: selectedProjectId || undefined,
         }),
       })
 
@@ -105,6 +191,50 @@ export default function UploadForm() {
 
   const handleSendToN8N = async () => {
     if (!result) return
+
+    // Determine destination
+    let destinationType: 'slack' | 'gmail' | undefined
+    let destinationAddress: string | undefined
+
+    if (selectedDestinationId === 'new') {
+      if (newDestinationAddress.trim()) {
+        destinationType = newDestinationType
+        destinationAddress = newDestinationAddress.trim()
+
+        // Save destination if checkbox is checked
+        if (saveDestination && newDestinationLabel.trim()) {
+          setIsSavingDestination(true)
+          try {
+            const saveResponse = await fetch('/api/saved-destinations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                label: newDestinationLabel.trim(),
+                type: newDestinationType,
+                address: newDestinationAddress.trim(),
+              }),
+            })
+            if (saveResponse.ok) {
+              await fetchSavedDestinations()
+              // Reset the "save" form
+              setSaveDestination(false)
+              setNewDestinationLabel('')
+            }
+          } catch (err) {
+            console.error('Failed to save destination:', err)
+          } finally {
+            setIsSavingDestination(false)
+          }
+        }
+      }
+    } else {
+      const selectedDest = savedDestinations.find(d => d.id === selectedDestinationId)
+      if (selectedDest) {
+        destinationType = selectedDest.type
+        destinationAddress = selectedDest.address
+      }
+    }
+
     setIsSendingToN8N(true)
     setN8nSuccess(false)
     try {
@@ -114,9 +244,12 @@ export default function UploadForm() {
         body: JSON.stringify({
           transcriptId: result.id,
           filename: result.filename,
+          title: result.title || title.trim() || undefined,
           status: 'completed',
           text: result.text,
           duration: result.duration,
+          destinationType,
+          destinationAddress,
         }),
       })
       if (!response.ok) {
@@ -134,6 +267,43 @@ export default function UploadForm() {
 
   return (
     <div className="w-full max-w-xl mx-auto">
+      {/* Title and Project inputs - shown before upload */}
+      {!result && (
+        <div className="mb-4 space-y-4">
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+              Titel (optioneel)
+            </label>
+            <input
+              type="text"
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Bijv. Interview Jan de Vries"
+              disabled={isUploading}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            />
+          </div>
+          <div>
+            <label htmlFor="project" className="block text-sm font-medium text-gray-700 mb-1">
+              Project (optioneel)
+            </label>
+            <select
+              id="project"
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              disabled={isUploading}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="">Geen project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -220,9 +390,125 @@ export default function UploadForm() {
 
       {result && (
         <div className="mt-8 space-y-6">
+          {/* Destination selector */}
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Verstuur naar</h3>
+
+            {/* Saved destinations dropdown */}
+            <div className="space-y-4">
+              <div>
+                <select
+                  value={selectedDestinationId}
+                  onChange={(e) => setSelectedDestinationId(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="new">+ Nieuwe bestemming</option>
+                  {savedDestinations.map((dest) => (
+                    <option key={dest.id} value={dest.id}>
+                      {dest.label} ({dest.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Show selected destination info */}
+              {selectedDestinationId !== 'new' && (
+                <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                  <div>
+                    <span className="text-sm text-gray-600">
+                      {savedDestinations.find(d => d.id === selectedDestinationId)?.type === 'slack' ? 'Slack: ' : 'Gmail: '}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {savedDestinations.find(d => d.id === selectedDestinationId)?.address}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteDestination(selectedDestinationId)}
+                    className="text-red-500 hover:text-red-700 text-sm"
+                  >
+                    Verwijderen
+                  </button>
+                </div>
+              )}
+
+              {/* New destination form */}
+              {selectedDestinationId === 'new' && (
+                <div className="space-y-4 border-t border-gray-200 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                      <select
+                        value={newDestinationType}
+                        onChange={(e) => setNewDestinationType(e.target.value as 'slack' | 'gmail')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      >
+                        <option value="slack">Slack</option>
+                        <option value="gmail">Gmail</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {newDestinationType === 'slack' ? 'Kanaal' : 'E-mailadres'}
+                      </label>
+                      <input
+                        type={newDestinationType === 'gmail' ? 'email' : 'text'}
+                        value={newDestinationAddress}
+                        onChange={(e) => setNewDestinationAddress(e.target.value)}
+                        placeholder={newDestinationType === 'slack' ? '#algemeen' : 'email@voorbeeld.nl'}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Save for later option */}
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="saveDestination"
+                      checked={saveDestination}
+                      onChange={(e) => setSaveDestination(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="saveDestination" className="text-sm font-medium text-gray-700">
+                        Bewaar voor later
+                      </label>
+                      {saveDestination && (
+                        <input
+                          type="text"
+                          value={newDestinationLabel}
+                          onChange={(e) => setNewDestinationLabel(e.target.value)}
+                          placeholder="Bijv. Werk Slack"
+                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Prominent n8n button */}
+          <button
+            onClick={handleSendToN8N}
+            disabled={isSendingToN8N || isSavingDestination}
+            className={`w-full py-4 text-lg font-semibold rounded-lg transition-colors ${
+              n8nSuccess
+                ? 'bg-green-600 text-white'
+                : isSendingToN8N || isSavingDestination
+                ? 'bg-purple-400 text-white cursor-wait'
+                : 'bg-purple-600 text-white hover:bg-purple-700'
+            }`}
+          >
+            {isSendingToN8N ? 'Verzenden...' : n8nSuccess ? 'Verzonden naar n8n!' : 'Verstuur naar n8n'}
+          </button>
+
           <div className="bg-white border border-gray-200 rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Transcriptie</h2>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {result.title || 'Transcriptie'}
+              </h2>
               <div className="flex gap-2 text-sm text-gray-500">
                 <span>{result.filename}</span>
                 {result.duration && (
@@ -233,8 +519,30 @@ export default function UploadForm() {
             </div>
 
             <div className="prose max-w-none">
-              <p className="whitespace-pre-wrap text-gray-700">{result.text}</p>
+              <p className="whitespace-pre-wrap text-gray-700">
+                {isExpanded
+                  ? result.text
+                  : result.text.substring(0, 300) + (result.text.length > 300 ? '...' : '')
+                }
+              </p>
             </div>
+
+            {result.text.length > 300 && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="mt-3 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+              >
+                {isExpanded ? 'Minder weergeven' : 'Meer weergeven'}
+                <svg
+                  className={`ml-1 h-4 w-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            )}
 
             <div className="flex gap-3 mt-4 pt-4 border-t border-gray-100">
               <button
@@ -246,19 +554,6 @@ export default function UploadForm() {
                 }`}
               >
                 {isCopied ? 'Gekopieerd!' : 'Kopieer tekst'}
-              </button>
-              <button
-                onClick={handleSendToN8N}
-                disabled={isSendingToN8N}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  n8nSuccess
-                    ? 'bg-green-100 text-green-700'
-                    : isSendingToN8N
-                    ? 'bg-purple-100 text-purple-400 cursor-wait'
-                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                }`}
-              >
-                {isSendingToN8N ? 'Verzenden...' : n8nSuccess ? 'Verzonden!' : 'Verzend naar N8N'}
               </button>
             </div>
           </div>
@@ -288,7 +583,17 @@ export default function UploadForm() {
           </div>
 
           <button
-            onClick={() => setResult(null)}
+            onClick={() => {
+              setResult(null)
+              setIsExpanded(false)
+              setTitle('')
+              setSelectedProjectId('')
+              setSelectedDestinationId('new')
+              setNewDestinationType('slack')
+              setNewDestinationAddress('')
+              setSaveDestination(false)
+              setNewDestinationLabel('')
+            }}
             className="w-full py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
           >
             Nieuwe transcriptie

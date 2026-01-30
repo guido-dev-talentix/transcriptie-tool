@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { notifyN8N } from '@/lib/webhook'
+import { notifyN8N, Destination } from '@/lib/webhook'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,12 +12,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Build destination object if provided
+    let destination: Destination | undefined
+    if (data.destinationType && data.destinationAddress) {
+      if (data.destinationType !== 'slack' && data.destinationType !== 'gmail') {
+        return NextResponse.json(
+          { error: 'destinationType must be "slack" or "gmail"' },
+          { status: 400 }
+        )
+      }
+      destination = {
+        type: data.destinationType,
+        address: data.destinationAddress,
+      }
+    }
+
     await notifyN8N({
       transcriptId: data.transcriptId,
       filename: data.filename,
       status: data.status || 'completed',
+      title: data.title,
       text: data.text,
       duration: data.duration,
+      destination,
     })
 
     return NextResponse.json({ success: true })

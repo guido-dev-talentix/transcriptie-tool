@@ -15,6 +15,15 @@ interface Transcript {
   language: string | null
   error: string | null
   createdAt: string
+  cleanedText: string | null
+  summary: string | null
+  projectId: string | null
+  project?: { id: string; name: string } | null
+}
+
+interface Project {
+  id: string
+  name: string
 }
 
 function formatDuration(seconds: number | null): string {
@@ -34,6 +43,11 @@ export default function TranscriptView({ id }: { id: string }) {
   const [sendingToN8n, setSendingToN8n] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState('')
+  const [processingAI, setProcessingAI] = useState(false)
+  const [generatingReport, setGeneratingReport] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+  const [showAISection, setShowAISection] = useState(false)
 
   const fetchTranscript = async () => {
     try {
@@ -56,6 +70,7 @@ export default function TranscriptView({ id }: { id: string }) {
 
   useEffect(() => {
     fetchTranscript()
+    fetchProjects()
 
     // Poll for updates if processing
     const interval = setInterval(() => {
@@ -66,6 +81,118 @@ export default function TranscriptView({ id }: { id: string }) {
 
     return () => clearInterval(interval)
   }, [id, transcript?.status])
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('/api/projects?status=active')
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(data)
+      }
+    } catch (err) {
+      console.error('Error fetching projects:', err)
+    }
+  }
+
+  const [savingProject, setSavingProject] = useState(false)
+
+  useEffect(() => {
+    if (transcript?.projectId) {
+      setSelectedProjectId(transcript.projectId)
+    }
+  }, [transcript?.projectId])
+
+  const handleSaveProject = async () => {
+    if (!transcript) return
+
+    setSavingProject(true)
+    try {
+      const response = await fetch(`/api/transcripts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProjectId || null }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Project koppeling mislukt')
+      }
+
+      const updated = await response.json()
+      setTranscript(updated)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Project koppeling mislukt')
+    } finally {
+      setSavingProject(false)
+    }
+  }
+
+  const handleProcessWithAI = async () => {
+    if (!transcript) return
+    if (!selectedProjectId) {
+      alert('Selecteer eerst een project')
+      return
+    }
+
+    setProcessingAI(true)
+    try {
+      const response = await fetch('/api/ai/process-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcriptId: transcript.id,
+          projectId: selectedProjectId,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'AI verwerking mislukt')
+      }
+
+      const result = await response.json()
+      setTranscript({
+        ...transcript,
+        cleanedText: result.transcript.cleanedText,
+        summary: result.transcript.summary,
+        projectId: selectedProjectId,
+      })
+      setShowAISection(true)
+      alert(`AI verwerking voltooid! ${result.actionItems.length} actiepunten geëxtraheerd.`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'AI verwerking mislukt')
+    } finally {
+      setProcessingAI(false)
+    }
+  }
+
+  const handleGenerateReport = async () => {
+    if (!transcript || !selectedProjectId) return
+
+    setGeneratingReport(true)
+    try {
+      const response = await fetch('/api/ai/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcriptId: transcript.id,
+          projectId: selectedProjectId,
+          type: 'meeting',
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Verslag genereren mislukt')
+      }
+
+      const result = await response.json()
+      router.push(`/projects/${selectedProjectId}`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Verslag genereren mislukt')
+    } finally {
+      setGeneratingReport(false)
+    }
+  }
 
   const handleCopy = async () => {
     if (transcript?.text) {
@@ -295,6 +422,105 @@ export default function TranscriptView({ id }: { id: string }) {
       {/* Completed state */}
       {transcript.status === 'completed' && transcript.text && (
         <>
+          {/* AI Processing Section */}
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-purple-900 mb-4">AI Verwerking</h3>
+
+            {/* Project selector */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Project koppelen
+              </label>
+              <div className="flex items-center gap-2 max-w-md">
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="">Geen project</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {selectedProjectId !== (transcript.projectId || '') && (
+                  <button
+                    onClick={handleSaveProject}
+                    disabled={savingProject}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 text-sm whitespace-nowrap"
+                  >
+                    {savingProject ? 'Opslaan...' : 'Opslaan'}
+                  </button>
+                )}
+              </div>
+              {transcript.project && (
+                <p className="mt-1 text-sm text-gray-500">
+                  Huidig project: {transcript.project.name}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleProcessWithAI}
+                disabled={processingAI || !selectedProjectId}
+                className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {processingAI ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Verwerken...
+                  </>
+                ) : (
+                  'Verwerk met AI'
+                )}
+              </button>
+
+              {(transcript.cleanedText || transcript.summary) && (
+                <button
+                  onClick={handleGenerateReport}
+                  disabled={generatingReport || !selectedProjectId}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {generatingReport ? 'Genereren...' : 'Genereer Verslag'}
+                </button>
+              )}
+            </div>
+
+            {/* AI Results */}
+            {(transcript.summary || transcript.cleanedText) && (
+              <div className="mt-6 space-y-4">
+                {transcript.summary && (
+                  <div className="bg-white rounded-lg p-4 border border-purple-100">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Samenvatting</h4>
+                    <p className="text-gray-600">{transcript.summary}</p>
+                  </div>
+                )}
+
+                {transcript.cleanedText && (
+                  <div className="bg-white rounded-lg p-4 border border-purple-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-gray-700">Opgeschoonde Tekst</h4>
+                      <button
+                        onClick={() => setShowAISection(!showAISection)}
+                        className="text-sm text-purple-600 hover:text-purple-800"
+                      >
+                        {showAISection ? 'Verbergen' : 'Tonen'}
+                      </button>
+                    </div>
+                    {showAISection && (
+                      <p className="text-gray-600 whitespace-pre-wrap text-sm max-h-64 overflow-y-auto">
+                        {transcript.cleanedText}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Actions */}
           <div className="flex flex-wrap gap-3">
             <button
