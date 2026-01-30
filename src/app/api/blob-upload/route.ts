@@ -31,6 +31,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             'video/mp4',
           ],
           maximumSizeInBytes: 100 * 1024 * 1024, // 100MB
+          addRandomSuffix: true, // Ensure unique filenames
         }
       },
       onUploadCompleted: async ({ blob }) => {
