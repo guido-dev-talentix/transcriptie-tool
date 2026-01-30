@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { extractText } from 'unpdf'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,13 +19,13 @@ export async function POST(request: NextRequest) {
 
     // Read PDF file
     const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const buffer = new Uint8Array(arrayBuffer)
 
-    // Parse PDF - dynamic import to avoid issues
-    const pdfParse = (await import('pdf-parse')).default
-    const pdfData = await pdfParse(buffer)
+    // Parse PDF with unpdf
+    const { text: textArray } = await extractText(buffer)
+    const text = textArray.join('\n')
 
-    if (!pdfData.text || pdfData.text.trim().length === 0) {
+    if (!text || text.trim().length === 0) {
       return NextResponse.json(
         { error: 'Kon geen tekst uit PDF halen. Is het een gescand document?' },
         { status: 400 }
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
         filename: file.name,
         title: title?.trim() || null,
         status: 'completed',
-        text: pdfData.text.trim(),
+        text: text.trim(),
         language: 'nl', // Assume Dutch
         projectId: projectId || null,
       },

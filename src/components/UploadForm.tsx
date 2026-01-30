@@ -641,6 +641,7 @@ export default function UploadForm() {
                 <h2 className="text-xl font-semibold text-gray-900">SRT Ondertitels</h2>
                 <button
                   onClick={() => {
+                    if (!result.srt) return
                     const blob = new Blob([result.srt], { type: 'text/plain' })
                     const url = URL.createObjectURL(blob)
                     const a = document.createElement('a')
