@@ -8,9 +8,9 @@ interface TranscriptResult {
   filename: string
   title?: string
   text: string
-  srt: string
-  duration: number
-  language: string
+  srt?: string
+  duration?: number
+  language?: string
 }
 
 interface SavedDestination {
@@ -35,6 +35,9 @@ export default function UploadForm() {
   const [isSendingToN8N, setIsSendingToN8N] = useState(false)
   const [n8nSuccess, setN8nSuccess] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+
+  // Upload type state
+  const [uploadType, setUploadType] = useState<'audio' | 'pdf'>('audio')
 
   // Title state
   const [title, setTitle] = useState('')
@@ -105,7 +108,7 @@ export default function UploadForm() {
     }
   }
 
-  const handleUpload = async (file: File) => {
+  const handleAudioUpload = async (file: File) => {
     setError(null)
     setResult(null)
     setIsUploading(true)
@@ -151,6 +154,48 @@ export default function UploadForm() {
     }
   }
 
+  const handlePdfUpload = async (file: File) => {
+    setError(null)
+    setResult(null)
+    setIsUploading(true)
+    setIsExpanded(false)
+
+    try {
+      setUploadProgress('PDF verwerken...')
+
+      const formData = new FormData()
+      formData.append('file', file)
+      if (title.trim()) formData.append('title', title.trim())
+      if (selectedProjectId) formData.append('projectId', selectedProjectId)
+
+      const response = await fetch('/api/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'PDF verwerking mislukt')
+      }
+
+      setResult(data)
+      setUploadProgress(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Er is iets misgegaan')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleUpload = async (file: File) => {
+    if (uploadType === 'pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      await handlePdfUpload(file)
+    } else {
+      await handleAudioUpload(file)
+    }
+  }
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
@@ -159,7 +204,7 @@ export default function UploadForm() {
     if (file) {
       handleUpload(file)
     }
-  }, [])
+  }, [uploadType, title, selectedProjectId])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -270,6 +315,34 @@ export default function UploadForm() {
       {/* Title and Project inputs - shown before upload */}
       {!result && (
         <div className="mb-4 space-y-4">
+          {/* Upload Type Toggle */}
+          <div className="flex rounded-lg border border-gray-300 p-1 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => setUploadType('audio')}
+              disabled={isUploading}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                uploadType === 'audio'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Audio/Video
+            </button>
+            <button
+              type="button"
+              onClick={() => setUploadType('pdf')}
+              disabled={isUploading}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                uploadType === 'pdf'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              PDF (tekst)
+            </button>
+          </div>
+
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
               Titel (optioneel)
@@ -316,7 +389,7 @@ export default function UploadForm() {
       >
         <input
           type="file"
-          accept=".mp3,.wav,.m4a,.mp4,audio/*,video/mp4"
+          accept={uploadType === 'pdf' ? '.pdf,application/pdf' : '.mp3,.wav,.m4a,.mp4,audio/*,video/mp4'}
           onChange={handleFileSelect}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           disabled={isUploading}
@@ -369,13 +442,17 @@ export default function UploadForm() {
           ) : (
             <div>
               <p className="text-lg font-medium text-gray-900">
-                Sleep je audiobestand hierheen
+                {uploadType === 'pdf'
+                  ? 'Sleep je PDF bestand hierheen'
+                  : 'Sleep je audiobestand hierheen'}
               </p>
               <p className="text-sm text-gray-500 mt-1">
                 of klik om te selecteren
               </p>
               <p className="text-xs text-gray-400 mt-2">
-                Ondersteunde formaten: .mp3, .wav, .m4a, .mp4
+                {uploadType === 'pdf'
+                  ? 'Ondersteund formaat: .pdf'
+                  : 'Ondersteunde formaten: .mp3, .wav, .m4a, .mp4'}
               </p>
             </div>
           )}
@@ -558,29 +635,31 @@ export default function UploadForm() {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">SRT Ondertitels</h2>
-              <button
-                onClick={() => {
-                  const blob = new Blob([result.srt], { type: 'text/plain' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `${result.filename.replace(/\.[^/.]+$/, '')}.srt`
-                  a.click()
-                  URL.revokeObjectURL(url)
-                }}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Download SRT
-              </button>
-            </div>
+          {result.srt && (
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">SRT Ondertitels</h2>
+                <button
+                  onClick={() => {
+                    const blob = new Blob([result.srt], { type: 'text/plain' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${result.filename.replace(/\.[^/.]+$/, '')}.srt`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Download SRT
+                </button>
+              </div>
 
-            <pre className="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 overflow-x-auto max-h-64 overflow-y-auto">
-              {result.srt}
-            </pre>
-          </div>
+              <pre className="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 overflow-x-auto max-h-64 overflow-y-auto">
+                {result.srt}
+              </pre>
+            </div>
+          )}
 
           <button
             onClick={() => {

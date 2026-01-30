@@ -5,7 +5,8 @@
       "Bash(vercel logs:*)",
       "Bash(npm run build:*)",
       "Bash(npm run db:generate:*)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(git push:*)"
     ]
   }
 }
