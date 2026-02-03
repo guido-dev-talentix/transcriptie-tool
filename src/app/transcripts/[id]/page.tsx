@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import TranscriptView from '@/components/TranscriptView'
+import { use } from 'react'
 
-export default function TranscriptPage({ params }: { params: { id: string } }) {
+export default function TranscriptPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-4">
@@ -26,7 +29,7 @@ export default function TranscriptPage({ params }: { params: { id: string } }) {
         <h1 className="text-2xl font-bold text-gray-900">Transcriptie</h1>
       </div>
 
-      <TranscriptView id={params.id} />
+      <TranscriptView id={id} />
     </div>
   )
 }

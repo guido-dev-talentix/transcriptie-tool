@@ -135,6 +135,13 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
     onRefresh()
   }
 
+  const handleItemUpdate = (id: string, updates: Partial<DashboardData['recent']['actionItems'][0]>) => {
+    setActionItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    )
+    onRefresh()
+  }
+
   const formatDuration = (seconds: number | null) => {
     if (!seconds) return '-'
     const mins = Math.floor(seconds / 60)
@@ -177,7 +184,7 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
             </Link>
           </div>
           <div className="p-4">
-            <ActionItemList actionItems={actionItems} onStatusChange={handleStatusChange} />
+            <ActionItemList actionItems={actionItems} onStatusChange={handleStatusChange} onItemUpdate={handleItemUpdate} />
           </div>
         </div>
 

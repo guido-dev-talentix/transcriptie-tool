@@ -71,12 +71,16 @@ export default function TranscriptView({ id }: { id: string }) {
   useEffect(() => {
     fetchTranscript()
     fetchProjects()
+  }, [id])
 
-    // Poll for updates if processing
+  // Separate effect for polling - uses ref to avoid dependency issues
+  useEffect(() => {
+    if (transcript?.status !== 'processing' && transcript?.status !== 'pending') {
+      return
+    }
+
     const interval = setInterval(() => {
-      if (transcript?.status === 'processing' || transcript?.status === 'pending') {
-        fetchTranscript()
-      }
+      fetchTranscript()
     }, 3000)
 
     return () => clearInterval(interval)

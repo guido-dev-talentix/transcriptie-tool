@@ -26,17 +26,43 @@ export async function processTranscript(
   text: string,
   context?: { projectName?: string; meetingType?: string }
 ): Promise<ProcessedTranscript> {
-  const systemPrompt = `Je bent een AI-assistent die transcripties verwerkt voor een software development team bij Talentix.
-Je taak is om:
-1. De ruwe transcriptie op te schonen (verwijder "uhm", "eh", herhaling, en verbeter de leesbaarheid)
-2. Een beknopte samenvatting te maken (max 3-4 zinnen)
-3. Actiepunten te extraheren uit de tekst
+  const systemPrompt = `Je bent een expert in het verbeteren en opschonen van ruwe transcripties voor een software development team bij Talentix.
+
+Je hebt drie taken:
+
+## TAAK 1: OPGESCHOONDE TEKST (cleanedText)
+Dit is je BELANGRIJKSTE taak. Maak een VOLLEDIGE, UITGEBREIDE opgeschoonde versie van de transcriptie.
+
+Instructies voor het opschonen:
+- Corrigeer grammaticale fouten en spelfouten
+- Verwijder filler woorden zoals "uhm", "eh", "nou", "dus", "eigenlijk", "gewoon" wanneer ze geen betekenis toevoegen
+- Verwijder herhalingen en incomplete zinnen
+- Voeg correcte interpunctie toe (punten, komma's, vraagtekens, etc.)
+- Structureer de tekst in logische alinea's
+- Zorg voor goede leesbaarheid en natuurlijke zinsbouw
+
+Belangrijke regels voor opschonen:
+- Behoud ALTIJD de originele betekenis en intentie
+- Voeg GEEN nieuwe informatie of interpretaties toe
+- Behoud specifieke termen, namen en cijfers exact zoals genoemd
+- Gebruik Nederlandse spelling volgens de huidige spellingregels
+- Als iets onduidelijk is, laat het dan staan zoals het is
+- De opgeschoonde tekst moet VOLLEDIG zijn - laat niets belangrijks weg!
+
+## TAAK 2: SAMENVATTING (summary)
+Maak een beknopte samenvatting van 3-5 zinnen met de belangrijkste punten uit het gesprek.
+
+## TAAK 3: ACTIEPUNTEN (actionItems)
+Extraheer concrete actiepunten uit de tekst. Let op:
+- Alleen echte actiepunten met duidelijke taken
+- Geef prioriteit aan op basis van urgentie/belangrijkheid
+- Noteer de toegewezen persoon als die genoemd wordt
 
 Reageer ALTIJD in het Nederlands.
 Geef je antwoord in het volgende JSON formaat:
 {
-  "cleanedText": "De opgeschoonde versie van de transcriptie...",
-  "summary": "Een beknopte samenvatting van wat besproken is...",
+  "cleanedText": "De VOLLEDIGE opgeschoonde versie van de transcriptie met alle inhoud behouden...",
+  "summary": "Een beknopte samenvatting van 3-5 zinnen...",
   "actionItems": [
     {
       "title": "Korte actie titel",
@@ -54,7 +80,7 @@ ${text}`
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
+    max_tokens: 8192,
     messages: [
       {
         role: 'user',
