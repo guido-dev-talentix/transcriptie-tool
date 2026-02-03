@@ -6,7 +6,13 @@
       "Bash(npm run build:*)",
       "Bash(npm run db:generate:*)",
       "Bash(npx prisma:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nVerbeter AI transcript verwerking en voeg actiepunten pagina toe\n\n- Uitgebreide prompt voor opgeschoonde tekst met gedetailleerde instructies\n- Verhoog max_tokens naar 8192 voor langere transcripties\n- Nieuwe /projects/[id]/action-items pagina met filters en statistieken\n- API endpoint voor project-specifieke actiepunten\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git remote add:*)"
     ]
   }
 }
