@@ -36,17 +36,11 @@ export default function UploadForm() {
   const [n8nSuccess, setN8nSuccess] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // Upload type state
   const [uploadType, setUploadType] = useState<'audio' | 'pdf'>('audio')
-
-  // Title state
   const [title, setTitle] = useState('')
-
-  // Project state
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
 
-  // Destination states
   const [savedDestinations, setSavedDestinations] = useState<SavedDestination[]>([])
   const [selectedDestinationId, setSelectedDestinationId] = useState<string>('new')
   const [newDestinationType, setNewDestinationType] = useState<'slack' | 'gmail'>('slack')
@@ -55,12 +49,10 @@ export default function UploadForm() {
   const [newDestinationLabel, setNewDestinationLabel] = useState('')
   const [isSavingDestination, setIsSavingDestination] = useState(false)
 
-  // Load saved destinations and projects
   useEffect(() => {
     fetchSavedDestinations()
     fetchProjects()
 
-    // Check for projectId in URL
     const params = new URLSearchParams(window.location.search)
     const projectId = params.get('projectId')
     if (projectId) {
@@ -115,17 +107,13 @@ export default function UploadForm() {
     setIsExpanded(false)
 
     try {
-      // Step 1: Upload to Vercel Blob (bypasses Vercel function size limit)
-      setUploadProgress('Bestand uploaden naar cloud storage...')
+      setUploadProgress('Uploaden...')
 
       const blob = await upload(file.name, file, {
         access: 'public',
         handleUploadUrl: '/api/blob-upload',
       })
 
-      console.log('File uploaded to Blob:', blob.url)
-
-      // Step 2: Transcribe using the blob URL
       setUploadProgress('Transcriptie starten...')
 
       const response = await fetch('/api/transcribe-from-url', {
@@ -237,7 +225,6 @@ export default function UploadForm() {
   const handleSendToN8N = async () => {
     if (!result) return
 
-    // Determine destination
     let destinationType: 'slack' | 'gmail' | undefined
     let destinationAddress: string | undefined
 
@@ -246,7 +233,6 @@ export default function UploadForm() {
         destinationType = newDestinationType
         destinationAddress = newDestinationAddress.trim()
 
-        // Save destination if checkbox is checked
         if (saveDestination && newDestinationLabel.trim()) {
           setIsSavingDestination(true)
           try {
@@ -261,7 +247,6 @@ export default function UploadForm() {
             })
             if (saveResponse.ok) {
               await fetchSavedDestinations()
-              // Reset the "save" form
               setSaveDestination(false)
               setNewDestinationLabel('')
             }
@@ -311,20 +296,20 @@ export default function UploadForm() {
   }
 
   return (
-    <div className="w-full max-w-xl mx-auto">
-      {/* Title and Project inputs - shown before upload */}
+    <div className="w-full">
+      {/* Form inputs before upload */}
       {!result && (
-        <div className="mb-4 space-y-4">
+        <div className="mb-6 space-y-4">
           {/* Upload Type Toggle */}
-          <div className="flex rounded-lg border border-gray-300 p-1 bg-gray-50">
+          <div className="flex rounded-lg border border-slate-200 p-1 bg-slate-50">
             <button
               type="button"
               onClick={() => setUploadType('audio')}
               disabled={isUploading}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                 uploadType === 'audio'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Audio/Video
@@ -335,16 +320,16 @@ export default function UploadForm() {
               disabled={isUploading}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                 uploadType === 'pdf'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              PDF (tekst)
+              PDF
             </button>
           </div>
 
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-1">
               Titel (optioneel)
             </label>
             <input
@@ -354,11 +339,12 @@ export default function UploadForm() {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Bijv. Interview Jan de Vries"
               disabled={isUploading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="input"
             />
           </div>
+
           <div>
-            <label htmlFor="project" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="project" className="block text-sm font-medium text-slate-700 mb-1">
               Project (optioneel)
             </label>
             <select
@@ -366,7 +352,7 @@ export default function UploadForm() {
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
               disabled={isUploading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="input"
             >
               <option value="">Geen project</option>
               {projects.map((p) => (
@@ -377,13 +363,17 @@ export default function UploadForm() {
         </div>
       )}
 
+      {/* Drop Zone */}
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         className={`
-          relative border-2 border-dashed rounded-lg p-12 text-center transition-colors
-          ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+          relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
+          ${isDragging
+            ? 'border-sky-400 bg-sky-50'
+            : 'border-slate-300 hover:border-slate-400 bg-white'
+          }
           ${isUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}
         `}
       >
@@ -395,250 +385,181 @@ export default function UploadForm() {
           disabled={isUploading}
         />
 
-        <div className="space-y-4">
-          <div className="flex justify-center">
-            {isUploading ? (
-              <svg
-                className="animate-spin h-12 w-12 text-blue-500"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="h-12 w-12 text-gray-400"
-                stroke="currentColor"
-                fill="none"
-                viewBox="0 0 48 48"
-              >
-                <path
-                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
-          </div>
-
+        <div className="space-y-3">
           {isUploading ? (
-            <div>
-              <p className="text-lg font-medium text-gray-900">{uploadProgress}</p>
-              <p className="text-sm text-gray-500 mt-1">Even geduld...</p>
-            </div>
+            <>
+              <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin mx-auto" />
+              <p className="text-sm text-slate-600">{uploadProgress}</p>
+            </>
           ) : (
-            <div>
-              <p className="text-lg font-medium text-gray-900">
-                {uploadType === 'pdf'
-                  ? 'Sleep je PDF bestand hierheen'
-                  : 'Sleep je audiobestand hierheen'}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                of klik om te selecteren
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                {uploadType === 'pdf'
-                  ? 'Ondersteund formaat: .pdf'
-                  : 'Ondersteunde formaten: .mp3, .wav, .m4a, .mp4'}
-              </p>
-            </div>
+            <>
+              <svg className="w-8 h-8 text-slate-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <div>
+                <p className="text-sm text-slate-600">
+                  Sleep een bestand hierheen of{' '}
+                  <span className="text-sky-600 font-medium">klik om te selecteren</span>
+                </p>
+              </div>
+            </>
           )}
         </div>
       </div>
 
+      {/* Error Message */}
       {error && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-600">{error}</p>
         </div>
       )}
 
+      {/* Results */}
       {result && (
-        <div className="mt-8 space-y-6">
+        <div className="mt-6 space-y-4">
           {/* Destination selector */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Verstuur naar</h3>
+          <div className="card">
+            <h3 className="text-sm font-medium text-slate-900 mb-3">Verstuur naar</h3>
 
-            {/* Saved destinations dropdown */}
-            <div className="space-y-4">
-              <div>
-                <select
-                  value={selectedDestinationId}
-                  onChange={(e) => setSelectedDestinationId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                >
-                  <option value="new">+ Nieuwe bestemming</option>
-                  {savedDestinations.map((dest) => (
-                    <option key={dest.id} value={dest.id}>
-                      {dest.label} ({dest.type})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-3">
+              <select
+                value={selectedDestinationId}
+                onChange={(e) => setSelectedDestinationId(e.target.value)}
+                className="input"
+              >
+                <option value="new">+ Nieuwe bestemming</option>
+                {savedDestinations.map((dest) => (
+                  <option key={dest.id} value={dest.id}>
+                    {dest.label} ({dest.type})
+                  </option>
+                ))}
+              </select>
 
-              {/* Show selected destination info */}
               {selectedDestinationId !== 'new' && (
-                <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                  <div>
-                    <span className="text-sm text-gray-600">
-                      {savedDestinations.find(d => d.id === selectedDestinationId)?.type === 'slack' ? 'Slack: ' : 'Gmail: '}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {savedDestinations.find(d => d.id === selectedDestinationId)?.address}
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg text-sm">
+                  <span className="text-slate-600">
+                    {savedDestinations.find(d => d.id === selectedDestinationId)?.address}
+                  </span>
                   <button
                     onClick={() => handleDeleteDestination(selectedDestinationId)}
-                    className="text-red-500 hover:text-red-700 text-sm"
+                    className="text-red-600 hover:text-red-700 text-sm"
                   >
                     Verwijderen
                   </button>
                 </div>
               )}
 
-              {/* New destination form */}
               {selectedDestinationId === 'new' && (
-                <div className="space-y-4 border-t border-gray-200 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3 pt-3 border-t border-slate-200">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
                       <select
                         value={newDestinationType}
                         onChange={(e) => setNewDestinationType(e.target.value as 'slack' | 'gmail')}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        className="input"
                       >
                         <option value="slack">Slack</option>
                         <option value="gmail">Gmail</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {newDestinationType === 'slack' ? 'Kanaal' : 'E-mailadres'}
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {newDestinationType === 'slack' ? 'Kanaal' : 'E-mail'}
                       </label>
                       <input
                         type={newDestinationType === 'gmail' ? 'email' : 'text'}
                         value={newDestinationAddress}
                         onChange={(e) => setNewDestinationAddress(e.target.value)}
                         placeholder={newDestinationType === 'slack' ? '#algemeen' : 'email@voorbeeld.nl'}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        className="input"
                       />
                     </div>
                   </div>
 
-                  {/* Save for later option */}
-                  <div className="flex items-start gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      id="saveDestination"
                       checked={saveDestination}
                       onChange={(e) => setSaveDestination(e.target.checked)}
-                      className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                     />
-                    <div className="flex-1">
-                      <label htmlFor="saveDestination" className="text-sm font-medium text-gray-700">
-                        Bewaar voor later
-                      </label>
-                      {saveDestination && (
-                        <input
-                          type="text"
-                          value={newDestinationLabel}
-                          onChange={(e) => setNewDestinationLabel(e.target.value)}
-                          placeholder="Bijv. Werk Slack"
-                          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        />
-                      )}
-                    </div>
-                  </div>
+                    <span className="text-sm text-slate-600">Bewaar voor later</span>
+                  </label>
+
+                  {saveDestination && (
+                    <input
+                      type="text"
+                      value={newDestinationLabel}
+                      onChange={(e) => setNewDestinationLabel(e.target.value)}
+                      placeholder="Label (bijv. Werk Slack)"
+                      className="input"
+                    />
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Prominent n8n button */}
+          {/* Send button */}
           <button
             onClick={handleSendToN8N}
             disabled={isSendingToN8N || isSavingDestination}
-            className={`w-full py-4 text-lg font-semibold rounded-lg transition-colors ${
+            className={`w-full py-3 text-sm font-medium rounded-lg transition-colors ${
               n8nSuccess
-                ? 'bg-green-600 text-white'
-                : isSendingToN8N || isSavingDestination
-                ? 'bg-purple-400 text-white cursor-wait'
-                : 'bg-purple-600 text-white hover:bg-purple-700'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50'
             }`}
           >
-            {isSendingToN8N ? 'Verzenden...' : n8nSuccess ? 'Verzonden naar n8n!' : 'Verstuur naar n8n'}
+            {isSendingToN8N ? 'Verzenden...' : n8nSuccess ? 'Verzonden!' : 'Verstuur naar n8n'}
           </button>
 
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
+          {/* Transcript Card */}
+          <div className="card">
+            <div className="flex items-start justify-between mb-3">
+              <h2 className="text-sm font-medium text-slate-900">
                 {result.title || 'Transcriptie'}
               </h2>
-              <div className="flex gap-2 text-sm text-gray-500">
-                <span>{result.filename}</span>
+              <div className="flex gap-2 text-xs">
                 {result.duration && (
-                  <span>• {Math.floor(result.duration / 60)}:{String(Math.floor(result.duration % 60)).padStart(2, '0')}</span>
+                  <span className="badge badge-neutral">
+                    {Math.floor(result.duration / 60)}:{String(Math.floor(result.duration % 60)).padStart(2, '0')}
+                  </span>
                 )}
-                {result.language && <span>• {result.language}</span>}
               </div>
             </div>
 
-            <div className="prose max-w-none">
-              <p className="whitespace-pre-wrap text-gray-700">
-                {isExpanded
-                  ? result.text
-                  : result.text.substring(0, 300) + (result.text.length > 300 ? '...' : '')
-                }
-              </p>
-            </div>
+            <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
+              {isExpanded
+                ? result.text
+                : result.text.substring(0, 300) + (result.text.length > 300 ? '...' : '')
+              }
+            </p>
 
             {result.text.length > 300 && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-3 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+                className="mt-3 text-sm text-sky-600 hover:text-sky-700"
               >
                 {isExpanded ? 'Minder weergeven' : 'Meer weergeven'}
-                <svg
-                  className={`ml-1 h-4 w-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
               </button>
             )}
 
-            <div className="flex gap-3 mt-4 pt-4 border-t border-gray-100">
+            <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200">
               <button
                 onClick={handleCopyText}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isCopied
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`btn-secondary text-sm ${isCopied ? 'text-emerald-600 border-emerald-300' : ''}`}
               >
                 {isCopied ? 'Gekopieerd!' : 'Kopieer tekst'}
               </button>
             </div>
           </div>
 
+          {/* SRT Section */}
           {result.srt && (
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">SRT Ondertitels</h2>
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium text-slate-900">SRT Ondertitels</h2>
                 <button
                   onClick={() => {
                     if (!result.srt) return
@@ -650,18 +571,19 @@ export default function UploadForm() {
                     a.click()
                     URL.revokeObjectURL(url)
                   }}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  className="btn-secondary text-sm"
                 >
-                  Download SRT
+                  Download
                 </button>
               </div>
 
-              <pre className="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 overflow-x-auto max-h-64 overflow-y-auto">
+              <pre className="bg-slate-50 p-3 rounded-lg text-xs text-slate-600 overflow-x-auto max-h-48 overflow-y-auto">
                 {result.srt}
               </pre>
             </div>
           )}
 
+          {/* New Upload Button */}
           <button
             onClick={() => {
               setResult(null)
@@ -674,7 +596,7 @@ export default function UploadForm() {
               setSaveDestination(false)
               setNewDestinationLabel('')
             }}
-            className="w-full py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            className="w-full btn-secondary"
           >
             Nieuwe transcriptie
           </button>

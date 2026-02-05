@@ -107,7 +107,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   }
 
   const handleDelete = async () => {
-    if (!confirm('Weet je zeker dat je dit project wilt verwijderen? Alle gekoppelde verslagen en actiepunten worden ook verwijderd.')) {
+    if (!confirm('Weet je zeker dat je dit project wilt verwijderen?')) {
       return
     }
 
@@ -126,9 +126,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      active: 'bg-green-100 text-green-800',
-      completed: 'bg-blue-100 text-blue-800',
-      archived: 'bg-gray-100 text-gray-800',
+      active: 'badge-success',
+      completed: 'badge-neutral',
+      archived: 'badge-neutral',
     }
     const labels: Record<string, string> = {
       active: 'Actief',
@@ -136,7 +136,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       archived: 'Gearchiveerd',
     }
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[status] || styles.active}`}>
+      <span className={`badge ${styles[status] || styles.active}`}>
         {labels[status] || status}
       </span>
     )
@@ -145,8 +145,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-        <p className="mt-2 text-gray-500">Laden...</p>
+        <div className="w-6 h-6 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin mx-auto"></div>
+        <p className="mt-3 text-sm text-slate-500">Laden...</p>
       </div>
     )
   }
@@ -154,8 +154,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   if (error || !data) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Project niet gevonden'}</p>
-        <Link href="/projects" className="mt-4 inline-block text-blue-600 hover:text-blue-800">
+        <p className="text-sm text-red-600">{error || 'Project niet gevonden'}</p>
+        <Link href="/projects" className="mt-4 inline-block text-sm text-sky-600 hover:text-sky-700">
           Terug naar projecten
         </Link>
       </div>
@@ -165,28 +165,28 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className="card">
         <div className="flex items-start justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Link href="/projects" className="text-gray-400 hover:text-gray-600">
+            <div className="flex items-center gap-3 mb-2">
+              <Link href="/projects" className="text-slate-400 hover:text-slate-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </Link>
-              <h1 className="text-2xl font-bold text-gray-900">{data.project.name}</h1>
+              <h1 className="text-xl font-semibold text-slate-900">{data.project.name}</h1>
             </div>
             {data.project.description && (
-              <p className="text-gray-600 mt-1">{data.project.description}</p>
+              <p className="text-sm text-slate-500 ml-8">{data.project.description}</p>
             )}
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-3 ml-8 flex items-center gap-3">
               {isEditingStatus ? (
                 <select
                   value={data.project.status}
                   onChange={(e) => handleStatusChange(e.target.value)}
                   onBlur={() => setIsEditingStatus(false)}
                   autoFocus
-                  className="px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="input !w-auto !py-1 text-sm"
                 >
                   <option value="active">Actief</option>
                   <option value="completed">Voltooid</option>
@@ -195,12 +195,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               ) : (
                 <button
                   onClick={() => setIsEditingStatus(true)}
-                  className="hover:opacity-75 transition-opacity"
+                  className="hover:opacity-75"
                 >
                   {getStatusBadge(data.project.status)}
                 </button>
               )}
-              <span className="text-sm text-gray-500">
+              <span className="text-xs text-slate-400">
                 Aangemaakt: {new Date(data.project.createdAt).toLocaleDateString('nl-NL')}
               </span>
             </div>
@@ -209,13 +209,13 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <div className="flex items-center gap-2">
             <Link
               href={`/?projectId=${id}`}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+              className="btn-primary"
             >
               + Transcriptie
             </Link>
             <button
               onClick={handleDelete}
-              className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 text-sm"
+              className="btn-danger"
             >
               Verwijderen
             </button>

@@ -72,15 +72,15 @@ export default function ReportView({ report, onUpdate, onDelete }: ReportViewPro
       summary: 'Samenvatting',
     }
     return (
-      <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800">
+      <span className="badge badge-accent">
         {labels[type] || type}
       </span>
     )
   }
 
   return (
-    <div className="bg-white shadow rounded-lg">
-      <div className="p-6 border-b border-gray-200">
+    <div className="card !p-0">
+      <div className="p-6 border-b border-slate-200">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             {isEditing ? (
@@ -88,23 +88,23 @@ export default function ReportView({ report, onUpdate, onDelete }: ReportViewPro
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full text-xl font-semibold px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="input text-heading-s font-display font-semibold"
               />
             ) : (
-              <h2 className="text-xl font-semibold text-gray-900">{report.title}</h2>
+              <h2 className="text-heading-s font-display font-semibold text-primary">{report.title}</h2>
             )}
-            <div className="mt-2 flex items-center gap-3 text-sm text-gray-500">
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate font-body">
               {getTypeBadge(report.type)}
               <span>{new Date(report.createdAt).toLocaleDateString('nl-NL')}</span>
               {report.transcript && (
                 <span>
-                  Van: {report.transcript.title || report.transcript.filename}
+                  Van: <span className="font-display font-semibold">{report.transcript.title || report.transcript.filename}</span>
                 </span>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {isEditing ? (
               <>
                 <button
@@ -113,14 +113,14 @@ export default function ReportView({ report, onUpdate, onDelete }: ReportViewPro
                     setContent(report.content)
                     setTitle(report.title)
                   }}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="btn-secondary"
                 >
                   Annuleren
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="btn-primary disabled:opacity-50"
                 >
                   {isSaving ? 'Opslaan...' : 'Opslaan'}
                 </button>
@@ -129,13 +129,13 @@ export default function ReportView({ report, onUpdate, onDelete }: ReportViewPro
               <>
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+                  className="btn-secondary"
                 >
                   Bewerken
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="px-3 py-1.5 text-sm border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
+                  className="px-5 py-2.5 border-2 border-cta-red/30 text-cta-red rounded-xl hover:bg-cta-red/10 font-display font-semibold transition-colors"
                 >
                   Verwijderen
                 </button>
@@ -151,11 +151,11 @@ export default function ReportView({ report, onUpdate, onDelete }: ReportViewPro
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={20}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500"
+            className="input font-mono text-sm resize-none"
             placeholder="Markdown inhoud..."
           />
         ) : (
-          <div className="prose prose-sm max-w-none">
+          <div className="prose prose-sm max-w-none prose-headings:font-display prose-headings:text-primary prose-a:text-brand-light-blue prose-p:font-body prose-p:text-slate prose-p:font-light">
             <ReactMarkdown>{report.content}</ReactMarkdown>
           </div>
         )}

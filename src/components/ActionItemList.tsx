@@ -17,14 +17,12 @@ interface ActionItemListProps {
   actionItems: ActionItem[]
   onStatusChange?: (id: string, status: string) => void
   onItemUpdate?: (id: string, updates: Partial<ActionItem>) => void
-  showProject?: boolean
 }
 
 export default function ActionItemList({
   actionItems,
   onStatusChange,
   onItemUpdate,
-  showProject = false,
 }: ActionItemListProps) {
   const [updating, setUpdating] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<ActionItem | null>(null)
@@ -98,9 +96,9 @@ export default function ActionItemList({
 
   const getPriorityBadge = (priority: string) => {
     const styles: Record<string, string> = {
-      high: 'bg-red-100 text-red-800',
-      medium: 'bg-yellow-100 text-yellow-800',
-      low: 'bg-gray-100 text-gray-800',
+      high: 'badge-error',
+      medium: 'badge-warning',
+      low: 'badge-neutral',
     }
     const labels: Record<string, string> = {
       high: 'Hoog',
@@ -108,7 +106,7 @@ export default function ActionItemList({
       low: 'Laag',
     }
     return (
-      <span className={`px-2 py-0.5 text-xs font-medium rounded ${styles[priority] || styles.medium}`}>
+      <span className={`badge ${styles[priority] || styles.medium}`}>
         {labels[priority] || priority}
       </span>
     )
@@ -117,20 +115,20 @@ export default function ActionItemList({
   const getStatusIcon = (status: string) => {
     if (status === 'done') {
       return (
-        <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+        <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
         </svg>
       )
     }
     if (status === 'in_progress') {
       return (
-        <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       )
     }
     return (
-      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" strokeWidth={2} />
       </svg>
     )
@@ -138,19 +136,21 @@ export default function ActionItemList({
 
   if (actionItems.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        <p>Geen actiepunten gevonden</p>
+      <div className="text-center py-6 text-slate-500">
+        <p className="text-sm">Geen actiepunten</p>
       </div>
     )
   }
 
   return (
     <>
-      <div className="divide-y divide-gray-100">
+      <div className="space-y-2">
         {actionItems.map((item) => (
           <div
             key={item.id}
-            className={`py-4 flex items-start gap-3 ${item.status === 'done' ? 'opacity-60' : ''}`}
+            className={`flex items-start gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors ${
+              item.status === 'done' ? 'opacity-60' : ''
+            }`}
           >
             <button
               onClick={() => {
@@ -162,7 +162,7 @@ export default function ActionItemList({
               title={`Status: ${item.status}`}
             >
               {updating === item.id ? (
-                <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                <div className="w-4 h-4 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin" />
               ) : (
                 getStatusIcon(item.status)
               )}
@@ -170,41 +170,25 @@ export default function ActionItemList({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className={`text-sm font-medium ${item.status === 'done' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                <p className={`text-sm ${item.status === 'done' ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                   {item.title}
                 </p>
                 {getPriorityBadge(item.priority)}
               </div>
 
-              {item.description && (
-                <p className="mt-1 text-sm text-gray-500 line-clamp-2">
-                  {item.description}
-                </p>
-              )}
-
-              <div className="mt-2 flex items-center gap-4 text-xs text-gray-400">
+              <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
                 {item.assignee && (
-                  <span className="flex items-center">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    {item.assignee}
-                  </span>
+                  <span>{item.assignee}</span>
                 )}
                 {item.dueDate && (
-                  <span className="flex items-center">
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    {new Date(item.dueDate).toLocaleDateString('nl-NL')}
-                  </span>
+                  <span>{new Date(item.dueDate).toLocaleDateString('nl-NL')}</span>
                 )}
               </div>
             </div>
 
             <button
               onClick={() => handleEditClick(item)}
-              className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              className="flex-shrink-0 p-1.5 text-slate-400 hover:text-slate-600 transition-colors rounded hover:bg-slate-100"
               title="Bewerken"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,59 +201,51 @@ export default function ActionItemList({
 
       {/* Edit Modal */}
       {editingItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Actiepunt bewerken</h3>
+            <div className="p-4 border-b border-slate-200">
+              <h3 className="text-sm font-medium text-slate-900">Actiepunt bewerken</h3>
             </div>
 
             <div className="p-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Titel
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Titel</label>
                 <input
                   type="text"
                   value={editForm.title}
                   onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="input"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Beschrijving
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Beschrijving</label>
                 <textarea
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="input resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Toegewezen aan
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Toegewezen aan</label>
                 <input
                   type="text"
                   value={editForm.assignee}
                   onChange={(e) => setEditForm({ ...editForm, assignee: e.target.value })}
-                  placeholder="Naam van deelnemer"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Naam"
+                  className="input"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Prioriteit
-                  </label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Prioriteit</label>
                   <select
                     value={editForm.priority}
                     onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="input"
                   >
                     <option value="low">Laag</option>
                     <option value="medium">Medium</option>
@@ -278,30 +254,28 @@ export default function ActionItemList({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Deadline
-                  </label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Deadline</label>
                   <input
                     type="date"
                     value={editForm.dueDate}
                     onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="input"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
               <button
                 onClick={() => setEditingItem(null)}
-                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                className="btn-secondary"
               >
                 Annuleren
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={updating === editingItem.id || !editForm.title.trim()}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary disabled:opacity-50"
               >
                 {updating === editingItem.id ? 'Opslaan...' : 'Opslaan'}
               </button>

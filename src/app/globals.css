@@ -1,3 +1,205 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Fractul Font Family - Search X Display Font */
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-Italic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-MediumItalic.otf') format('opentype');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-SemiBold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-SemiBoldItalic.otf') format('opentype');
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fractul';
+  src: url('/fonts/Fractul-BoldItalic.otf') format('opentype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    /* Search X Brand Colors */
+    --brand-blue: #193254;
+    --brand-light-blue: #94D4E9;
+    --brand-yellow: #FDD963;
+    --brand-red: #EC6278;
+
+    /* Font Variables */
+    --font-display: 'Fractul', system-ui, sans-serif;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply antialiased font-body text-slate-700;
+    background-color: #f8fafc;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display text-slate-900;
+  }
+}
+
+@layer components {
+  /* ===== BUTTONS ===== */
+
+  .btn-primary {
+    @apply px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white transition-colors;
+  }
+
+  .btn-primary:hover {
+    @apply bg-slate-700;
+  }
+
+  .btn-primary:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 bg-white transition-colors;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-slate-50 border-slate-400;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 text-sm font-medium rounded-lg text-red-600 border border-red-200 bg-white transition-colors;
+  }
+
+  .btn-danger:hover {
+    @apply bg-red-50 border-red-300;
+  }
+
+  /* ===== CARDS ===== */
+
+  .card {
+    @apply bg-white rounded-lg border border-slate-200 p-5;
+  }
+
+  /* ===== INPUTS ===== */
+
+  .input {
+    @apply w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-900 placeholder-slate-400 transition-colors;
+  }
+
+  .input:focus {
+    @apply outline-none border-slate-400 ring-2 ring-slate-100;
+  }
+
+  .input:disabled {
+    @apply bg-slate-50 cursor-not-allowed opacity-60;
+  }
+
+  /* ===== BADGES ===== */
+
+  .badge {
+    @apply px-2 py-0.5 text-xs font-medium rounded;
+  }
+
+  .badge-accent {
+    @apply bg-sky-100 text-sky-700;
+  }
+
+  .badge-success {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  .badge-warning {
+    @apply bg-amber-100 text-amber-700;
+  }
+
+  .badge-error {
+    @apply bg-red-100 text-red-700;
+  }
+
+  .badge-neutral {
+    @apply bg-slate-100 text-slate-600;
+  }
+
+  .badge-primary {
+    @apply bg-slate-800 text-white;
+  }
+
+  /* Status badges */
+  .badge-status-open {
+    @apply bg-slate-100 text-slate-600;
+  }
+
+  .badge-status-in-progress {
+    @apply bg-sky-100 text-sky-700;
+  }
+
+  .badge-status-done {
+    @apply bg-emerald-100 text-emerald-700;
+  }
+
+  /* ===== NAVIGATION ===== */
+
+  .nav-link {
+    @apply text-slate-600 hover:text-slate-900 px-3 py-2 text-sm font-medium transition-colors;
+  }
+
+  .nav-link-active {
+    @apply text-slate-900;
+  }
+}
+
+/* Custom selection */
+::selection {
+  background: rgba(148, 212, 233, 0.3);
+  color: #193254;
+}

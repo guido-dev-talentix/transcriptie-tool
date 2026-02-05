@@ -13,94 +13,97 @@ export default function NewProjectPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
+
+    if (!name.trim()) {
+      setError('Projectnaam is verplicht')
+      return
+    }
+
     setIsSubmitting(true)
+    setError(null)
 
     try {
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || null,
+        }),
       })
 
-      if (!response.ok) {
+      if (response.ok) {
+        const project = await response.json()
+        router.push(`/projects/${project.id}`)
+      } else {
         const data = await response.json()
-        throw new Error(data.error || 'Kon project niet aanmaken')
+        setError(data.error || 'Kon project niet aanmaken')
       }
-
-      const project = await response.json()
-      router.push(`/projects/${project.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Er is iets misgegaan')
+      setError('Er is iets misgegaan')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <Link href="/projects" className="text-blue-600 hover:text-blue-800 text-sm">
-          &larr; Terug naar projecten
+    <div className="max-w-lg mx-auto">
+      <div className="flex items-center gap-3 mb-6">
+        <Link href="/projects" className="text-slate-400 hover:text-slate-600">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
         </Link>
+        <h1 className="text-xl font-semibold text-slate-900">Nieuw project</h1>
       </div>
 
-      <div className="bg-white shadow rounded-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Nieuw Project</h1>
+      <form onSubmit={handleSubmit} className="card space-y-4">
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1">
+            Projectnaam
+          </label>
+          <input
+            type="text"
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Bijv. Klantgesprekken Q1"
+            className="input"
+            autoFocus
+          />
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-              Projectnaam *
-            </label>
-            <input
-              type="text"
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Bijv. Dashboard Redesign"
-            />
-          </div>
+        <div>
+          <label htmlFor="description" className="block text-sm font-medium text-slate-700 mb-1">
+            Beschrijving (optioneel)
+          </label>
+          <textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Korte beschrijving van het project"
+            className="input resize-none"
+          />
+        </div>
 
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-              Beschrijving
-            </label>
-            <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Optionele beschrijving van het project..."
-            />
-          </div>
+        {error && (
+          <p className="text-sm text-red-600">{error}</p>
+        )}
 
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end space-x-4">
-            <Link
-              href="/projects"
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-            >
-              Annuleren
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting || !name.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Aanmaken...' : 'Project Aanmaken'}
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Link href="/projects" className="btn-secondary">
+            Annuleren
+          </Link>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="btn-primary disabled:opacity-50"
+          >
+            {isSubmitting ? 'Aanmaken...' : 'Project aanmaken'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

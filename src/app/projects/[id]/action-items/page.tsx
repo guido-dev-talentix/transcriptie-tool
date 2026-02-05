@@ -89,18 +89,23 @@ export default function ProjectActionItemsPage({ params }: { params: Promise<{ i
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-        <p className="mt-2 text-gray-500">Laden...</p>
+      <div className="text-center py-16">
+        <div className="w-12 h-12 rounded-full border-4 border-slate-200 border-t-brand-light-blue animate-spin mx-auto"></div>
+        <p className="mt-4 text-slate font-body">Laden...</p>
       </div>
     )
   }
 
   if (error || !project) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Project niet gevonden'}</p>
-        <Link href="/projects" className="mt-4 inline-block text-blue-600 hover:text-blue-800">
+      <div className="text-center py-16 card">
+        <div className="w-16 h-16 rounded-2xl bg-cta-red/10 flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-cta-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p className="text-cta-red font-display font-semibold">{error || 'Project niet gevonden'}</p>
+        <Link href="/projects" className="mt-4 inline-block btn-secondary">
           Terug naar projecten
         </Link>
       </div>
@@ -108,72 +113,72 @@ export default function ProjectActionItemsPage({ params }: { params: Promise<{ i
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Link href={`/projects/${id}`} className="text-gray-400 hover:text-gray-600">
+      <div className="card">
+        <div className="flex items-center gap-4 mb-5">
+          <Link href={`/projects/${id}`} className="text-slate hover:text-brand-light-blue transition-colors p-2 rounded-xl hover:bg-accent-glow">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <p className="text-sm text-gray-500">{project.name}</p>
-            <h1 className="text-2xl font-bold text-gray-900">Actiepunten</h1>
+            <p className="text-sm text-slate font-body">{project.name}</p>
+            <h1 className="text-heading-l font-display font-bold text-primary">Actiepunten</h1>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mt-4">
-          <div className="text-center p-3 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-            <p className="text-xs text-gray-500">Totaal</p>
+        <div className="grid grid-cols-4 gap-4 mt-5">
+          <div className="text-center p-5 bg-surface-muted rounded-xl">
+            <p className="text-heading-s font-display font-bold text-primary">{stats.total}</p>
+            <p className="text-xs text-slate font-body mt-1">Totaal</p>
           </div>
-          <div className="text-center p-3 bg-gray-50 rounded-lg">
-            <p className="text-2xl font-bold text-gray-600">{stats.open}</p>
-            <p className="text-xs text-gray-500">Open</p>
+          <div className="text-center p-5 bg-surface-muted rounded-xl">
+            <p className="text-heading-s font-display font-bold text-slate">{stats.open}</p>
+            <p className="text-xs text-slate font-body mt-1">Open</p>
           </div>
-          <div className="text-center p-3 bg-blue-50 rounded-lg">
-            <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
-            <p className="text-xs text-gray-500">In uitvoering</p>
+          <div className="text-center p-5 bg-accent-glow rounded-xl">
+            <p className="text-heading-s font-display font-bold text-brand-light-blue">{stats.inProgress}</p>
+            <p className="text-xs text-slate font-body mt-1">In uitvoering</p>
           </div>
-          <div className="text-center p-3 bg-green-50 rounded-lg">
-            <p className="text-2xl font-bold text-green-600">{stats.done}</p>
-            <p className="text-xs text-gray-500">Afgerond</p>
+          <div className="text-center p-5 bg-emerald-50 rounded-xl">
+            <p className="text-heading-s font-display font-bold text-emerald-600">{stats.done}</p>
+            <p className="text-xs text-slate font-body mt-1">Afgerond</p>
           </div>
         </div>
       </div>
 
       {/* Filter & List */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+      <div className="card !p-0">
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setFilter('all')}
-              className={`px-3 py-1.5 text-sm rounded-lg ${
+              className={`px-4 py-2 text-sm rounded-xl font-display font-semibold transition-all ${
                 filter === 'all'
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-primary text-white shadow-button'
+                  : 'text-slate hover:bg-surface-muted'
               }`}
             >
               Alle ({stats.total})
             </button>
             <button
               onClick={() => setFilter('open')}
-              className={`px-3 py-1.5 text-sm rounded-lg ${
+              className={`px-4 py-2 text-sm rounded-xl font-display font-semibold transition-all ${
                 filter === 'open'
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-primary text-white shadow-button'
+                  : 'text-slate hover:bg-surface-muted'
               }`}
             >
               Open ({stats.open + stats.inProgress})
             </button>
             <button
               onClick={() => setFilter('done')}
-              className={`px-3 py-1.5 text-sm rounded-lg ${
+              className={`px-4 py-2 text-sm rounded-xl font-display font-semibold transition-all ${
                 filter === 'done'
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-primary text-white shadow-button'
+                  : 'text-slate hover:bg-surface-muted'
               }`}
             >
               Afgerond ({stats.done})
@@ -181,7 +186,7 @@ export default function ProjectActionItemsPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-5">
           <ActionItemList
             actionItems={filteredItems}
             onStatusChange={handleStatusChange}

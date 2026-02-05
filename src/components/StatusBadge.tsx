@@ -8,15 +8,15 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
   const getStatusStyles = () => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800'
+        return 'badge-success'
       case 'processing':
-        return 'bg-blue-100 text-blue-800'
+        return 'badge-accent'
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'badge-warning'
       case 'error':
-        return 'bg-red-100 text-red-800'
+        return 'badge-error'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'badge-neutral'
     }
   }
 
@@ -36,12 +36,10 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
   }
 
   return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusStyles()}`}
-    >
+    <span className={`badge ${getStatusStyles()} inline-flex items-center gap-1.5`}>
       {status === 'processing' && (
         <svg
-          className="animate-spin -ml-1 mr-1.5 h-3 w-3"
+          className="animate-spin h-3 w-3"
           fill="none"
           viewBox="0 0 24 24"
         >

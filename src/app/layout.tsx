@@ -1,13 +1,23 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Roboto } from 'next/font/google'
 import Link from 'next/link'
+import Image from 'next/image'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const roboto = Roboto({
+  subsets: ['latin'],
+  weight: ['300', '700'],
+  variable: '--font-body',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
-  title: 'Transcriptie Tool',
-  description: 'Audio transcriptie met AssemblyAI',
+  title: 'Transcriptie Tool - Search X',
+  description: 'Upload en transcribeer audio- en PDF-bestanden',
+  icons: {
+    icon: '/images/Logomark X.png',
+    apple: '/images/Logomark X.png',
+  },
 }
 
 export default function RootLayout({
@@ -16,45 +26,52 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="nl">
-      <body className={`${inter.className} bg-gray-50 min-h-screen`}>
-        <nav className="bg-white shadow-sm">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex">
-                <Link
-                  href="/"
-                  className="flex items-center text-xl font-semibold text-gray-900"
-                >
-                  Transcriptie Tool
-                </Link>
-              </div>
-              <div className="flex items-center space-x-4">
-                <Link
-                  href="/"
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
+    <html lang="nl" className={roboto.variable}>
+      <body className="min-h-screen flex flex-col">
+        {/* Navigation */}
+        <nav className="bg-white border-b border-slate-200">
+          <div className="max-w-5xl mx-auto px-4">
+            <div className="flex justify-between h-14 items-center">
+              <Link href="/" className="flex items-center">
+                <Image
+                  src="/images/Searchx-logo-blauw.png"
+                  alt="Search X"
+                  width={140}
+                  height={36}
+                  priority
+                />
+              </Link>
+
+              <div className="flex items-center gap-6">
+                <Link href="/" className="text-sm font-body text-brand-blue hover:text-brand-blue-light transition-colors">
                   Upload
                 </Link>
-                <Link
-                  href="/transcripts"
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
+                <Link href="/transcripts" className="text-sm font-body text-brand-blue hover:text-brand-blue-light transition-colors">
                   Transcripties
                 </Link>
-                <Link
-                  href="/projects"
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
+                <Link href="/projects" className="text-sm font-body text-brand-blue hover:text-brand-blue-light transition-colors">
                   Projecten
                 </Link>
               </div>
             </div>
           </div>
         </nav>
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* Main Content */}
+        <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8">
           {children}
         </main>
+
+        {/* Harley mascotte - subtiel rechtsonder */}
+        <div className="fixed bottom-4 right-4 opacity-10 pointer-events-none select-none hidden lg:block">
+          <Image
+            src="/images/Harley met potlood.svg"
+            alt=""
+            width={120}
+            height={160}
+            aria-hidden="true"
+          />
+        </div>
       </body>
     </html>
   )

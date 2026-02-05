@@ -73,7 +73,6 @@ export default function TranscriptView({ id }: { id: string }) {
     fetchProjects()
   }, [id])
 
-  // Separate effect for polling - uses ref to avoid dependency issues
   useEffect(() => {
     if (transcript?.status !== 'processing' && transcript?.status !== 'pending') {
       return
@@ -280,35 +279,22 @@ export default function TranscriptView({ id }: { id: string }) {
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <svg
-          className="animate-spin h-8 w-8 mx-auto text-gray-400"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          />
-        </svg>
-        <p className="mt-2 text-gray-500">Laden...</p>
+      <div className="text-center py-16">
+        <div className="w-12 h-12 rounded-full border-4 border-slate-200 border-t-brand-light-blue animate-spin mx-auto"></div>
+        <p className="mt-4 text-slate font-body">Laden...</p>
       </div>
     )
   }
 
   if (error || !transcript) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Niet gevonden'}</p>
+      <div className="text-center py-16 card">
+        <div className="w-16 h-16 rounded-2xl bg-cta-red/10 flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-cta-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p className="text-cta-red font-display font-semibold">{error || 'Niet gevonden'}</p>
       </div>
     )
   }
@@ -316,16 +302,16 @@ export default function TranscriptView({ id }: { id: string }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white shadow rounded-lg p-6">
+      <div className="card">
         <div className="flex items-start justify-between">
           <div className="flex-1 mr-4">
             {editingTitle ? (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-3">
                 <input
                   type="text"
                   value={titleValue}
                   onChange={(e) => setTitleValue(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input flex-1"
                   placeholder="Voer een titel in..."
                   autoFocus
                   onKeyDown={(e) => {
@@ -333,49 +319,33 @@ export default function TranscriptView({ id }: { id: string }) {
                     if (e.key === 'Escape') setEditingTitle(false)
                   }}
                 />
-                <button
-                  onClick={handleSaveTitle}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
+                <button onClick={handleSaveTitle} className="btn-primary">
                   Opslaan
                 </button>
-                <button
-                  onClick={() => setEditingTitle(false)}
-                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                >
+                <button onClick={() => setEditingTitle(false)} className="btn-secondary">
                   Annuleren
                 </button>
               </div>
             ) : (
-              <div className="flex items-center space-x-2">
-                <h2 className="text-xl font-semibold text-gray-900">
+              <div className="flex items-center gap-3">
+                <h2 className="text-heading-s font-display font-semibold text-primary">
                   {transcript.title || transcript.filename}
                 </h2>
                 <button
                   onClick={handleStartEditTitle}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-slate hover:text-brand-light-blue transition-colors p-2 rounded-xl hover:bg-accent-glow"
                   title="Titel bewerken"
                 >
-                  <svg
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                    />
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </button>
               </div>
             )}
-            <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-              {transcript.title && <span>Bestand: {transcript.filename}</span>}
-              <span>Duur: {formatDuration(transcript.duration)}</span>
-              {transcript.language && <span>Taal: {transcript.language}</span>}
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate font-body">
+              {transcript.title && <span className="badge badge-neutral">{transcript.filename}</span>}
+              <span className="badge badge-accent">Duur: {formatDuration(transcript.duration)}</span>
+              {transcript.language && <span className="badge badge-primary">{transcript.language}</span>}
             </div>
           </div>
           <StatusBadge status={transcript.status} />
@@ -384,30 +354,12 @@ export default function TranscriptView({ id }: { id: string }) {
 
       {/* Processing state */}
       {(transcript.status === 'processing' || transcript.status === 'pending') && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-          <svg
-            className="animate-spin h-12 w-12 mx-auto text-blue-500"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <p className="mt-4 text-lg font-medium text-blue-900">
+        <div className="bg-accent-glow border-2 border-brand-light-blue/30 rounded-2xl p-10 text-center">
+          <div className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-brand-light-blue animate-spin mx-auto"></div>
+          <p className="mt-6 text-heading-s font-display font-semibold text-primary">
             Je audio wordt getranscribeerd...
           </p>
-          <p className="mt-1 text-sm text-blue-700">
+          <p className="mt-2 text-body-l text-slate font-body">
             Dit kan enkele minuten duren, afhankelijk van de lengte van het bestand.
           </p>
         </div>
@@ -415,9 +367,9 @@ export default function TranscriptView({ id }: { id: string }) {
 
       {/* Error state */}
       {transcript.status === 'error' && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-red-900">Er is iets misgegaan</h3>
-          <p className="mt-2 text-sm text-red-700">
+        <div className="bg-cta-red/10 border-2 border-cta-red/20 rounded-2xl p-6">
+          <h3 className="text-lg font-display font-semibold text-cta-red">Er is iets misgegaan</h3>
+          <p className="mt-2 text-sm text-cta-red/80 font-body">
             {transcript.error || 'Onbekende fout bij het transcriberen'}
           </p>
         </div>
@@ -427,19 +379,19 @@ export default function TranscriptView({ id }: { id: string }) {
       {transcript.status === 'completed' && transcript.text && (
         <>
           {/* AI Processing Section */}
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-purple-900 mb-4">AI Verwerking</h3>
+          <div className="bg-brand-light-blue/15 border-2 border-brand-light-blue/20 rounded-2xl p-6">
+            <h3 className="text-lg font-display font-semibold text-primary mb-5">AI Verwerking</h3>
 
             {/* Project selector */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="mb-5">
+              <label className="block text-sm font-display font-semibold text-primary mb-2">
                 Project koppelen
               </label>
-              <div className="flex items-center gap-2 max-w-md">
+              <div className="flex items-center gap-3 max-w-md">
                 <select
                   value={selectedProjectId}
                   onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="input flex-1"
                 >
                   <option value="">Geen project</option>
                   {projects.map((p) => (
@@ -450,15 +402,15 @@ export default function TranscriptView({ id }: { id: string }) {
                   <button
                     onClick={handleSaveProject}
                     disabled={savingProject}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 text-sm whitespace-nowrap"
+                    className="btn-secondary whitespace-nowrap"
                   >
                     {savingProject ? 'Opslaan...' : 'Opslaan'}
                   </button>
                 )}
               </div>
               {transcript.project && (
-                <p className="mt-1 text-sm text-gray-500">
-                  Huidig project: {transcript.project.name}
+                <p className="mt-2 text-sm text-slate font-body">
+                  Huidig project: <span className="font-display font-semibold">{transcript.project.name}</span>
                 </p>
               )}
             </div>
@@ -467,14 +419,11 @@ export default function TranscriptView({ id }: { id: string }) {
               <button
                 onClick={handleProcessWithAI}
                 disabled={processingAI || !selectedProjectId}
-                className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
               >
                 {processingAI ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
+                    <div className="w-4 h-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin mr-2"></div>
                     Verwerken...
                   </>
                 ) : (
@@ -486,7 +435,7 @@ export default function TranscriptView({ id }: { id: string }) {
                 <button
                   onClick={handleGenerateReport}
                   disabled={generatingReport || !selectedProjectId}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-dark disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {generatingReport ? 'Genereren...' : 'Genereer Verslag'}
                 </button>
@@ -497,25 +446,25 @@ export default function TranscriptView({ id }: { id: string }) {
             {(transcript.summary || transcript.cleanedText) && (
               <div className="mt-6 space-y-4">
                 {transcript.summary && (
-                  <div className="bg-white rounded-lg p-4 border border-purple-100">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Samenvatting</h4>
-                    <p className="text-gray-600">{transcript.summary}</p>
+                  <div className="bg-white rounded-xl p-5 border border-slate-200">
+                    <h4 className="text-sm font-display font-semibold text-primary mb-3">Samenvatting</h4>
+                    <p className="text-body-l text-slate font-body font-light">{transcript.summary}</p>
                   </div>
                 )}
 
                 {transcript.cleanedText && (
-                  <div className="bg-white rounded-lg p-4 border border-purple-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-medium text-gray-700">Opgeschoonde Tekst</h4>
+                  <div className="bg-white rounded-xl p-5 border border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-display font-semibold text-primary">Opgeschoonde Tekst</h4>
                       <button
                         onClick={() => setShowAISection(!showAISection)}
-                        className="text-sm text-purple-600 hover:text-purple-800"
+                        className="text-sm font-display font-semibold text-brand-light-blue hover:text-accent-hover transition-colors"
                       >
                         {showAISection ? 'Verbergen' : 'Tonen'}
                       </button>
                     </div>
                     {showAISection && (
-                      <p className="text-gray-600 whitespace-pre-wrap text-sm max-h-64 overflow-y-auto">
+                      <p className="text-body-l text-slate font-body font-light whitespace-pre-wrap max-h-64 overflow-y-auto">
                         {transcript.cleanedText}
                       </p>
                     )}
@@ -530,64 +479,59 @@ export default function TranscriptView({ id }: { id: string }) {
             <button
               onClick={handleSendToN8n}
               disabled={sendingToN8n}
-              className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-secondary disabled:opacity-50"
             >
               {sendingToN8n ? 'Versturen...' : 'Verstuur naar n8n'}
             </button>
             <button
               onClick={handleCopy}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              className={`btn-secondary ${copied ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : ''}`}
             >
               {copied ? 'Gekopieerd!' : 'Kopieer tekst'}
             </button>
             <a
               href={`/api/transcripts/${id}/download?format=txt`}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              className="btn-secondary"
             >
               Download .txt
             </a>
             {transcript.srt && (
               <a
                 href={`/api/transcripts/${id}/download?format=srt`}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                className="btn-secondary"
               >
                 Download .srt
               </a>
             )}
             <button
               onClick={handleDelete}
-              className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50"
+              className="px-5 py-2.5 border-2 border-cta-red/30 text-cta-red rounded-xl hover:bg-cta-red/10 font-display font-semibold transition-colors"
             >
               Verwijderen
             </button>
           </div>
 
           {/* Transcript text */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Transcriptie</h3>
+          <div className="card">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-display font-semibold text-primary">Transcriptie</h3>
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-700 hover:text-blue-900"
+                className="inline-flex items-center text-sm font-display font-semibold text-brand-light-blue hover:text-accent-hover transition-colors"
               >
                 {expanded ? 'Toon minder' : 'Toon alles'}
                 <svg
-                  className={`ml-1 h-4 w-4 transform transition-transform ${expanded ? 'rotate-180' : ''}`}
+                  className={`ml-2 h-4 w-4 transform transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
             </div>
             <div className="prose prose-sm max-w-none">
-              <p className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+              <p className="whitespace-pre-wrap text-body-l text-slate font-body font-light leading-relaxed">
                 {expanded
                   ? transcript.text
                   : transcript.text.substring(0, 300) + (transcript.text.length > 300 ? '...' : '')

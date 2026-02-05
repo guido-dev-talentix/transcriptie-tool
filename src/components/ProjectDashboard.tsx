@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import ActionItemList from './ActionItemList'
 
@@ -149,141 +149,149 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  const getStatusBadge = (status: string) => {
+    if (status === 'done') return <span className="badge badge-success">Afgerond</span>
+    if (status === 'in_progress') return <span className="badge badge-accent">Bezig</span>
+    return <span className="badge badge-neutral">Open</span>
+  }
+
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Transcripties</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.totalTranscripts}</p>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="card text-center">
+          <p className="text-2xl font-semibold text-slate-900">{stats.totalTranscripts}</p>
+          <p className="text-xs text-slate-500 mt-1">Transcripties</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Verslagen</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.totalReports}</p>
+        <div className="card text-center">
+          <p className="text-2xl font-semibold text-slate-900">{stats.totalReports}</p>
+          <p className="text-xs text-slate-500 mt-1">Verslagen</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Open Acties</p>
-          <p className="text-2xl font-bold text-orange-600">{stats.actionItems.open + stats.actionItems.inProgress}</p>
+        <div className="card text-center">
+          <p className="text-2xl font-semibold text-amber-600">{stats.actionItems.open + stats.actionItems.inProgress}</p>
+          <p className="text-xs text-slate-500 mt-1">Open acties</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Afgerond</p>
-          <p className="text-2xl font-bold text-green-600">{stats.actionItems.done}</p>
+        <div className="card text-center">
+          <p className="text-2xl font-semibold text-emerald-600">{stats.actionItems.done}</p>
+          <p className="text-xs text-slate-500 mt-1">Afgerond</p>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Action Items */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Open Actiepunten</h3>
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-900">Open Actiepunten</h3>
             <Link
               href={`/projects/${project.id}/action-items`}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-xs text-sky-600 hover:text-sky-700"
             >
               Bekijk alle
             </Link>
           </div>
-          <div className="p-4">
-            <ActionItemList actionItems={actionItems} onStatusChange={handleStatusChange} onItemUpdate={handleItemUpdate} />
-          </div>
+          <ActionItemList
+            actionItems={actionItems}
+            onStatusChange={handleStatusChange}
+            onItemUpdate={handleItemUpdate}
+          />
         </div>
 
         {/* Recent Transcripts */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Recente Transcripties</h3>
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-900">Transcripties</h3>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleOpenModal}
-                className="text-sm text-green-600 hover:text-green-800 font-medium"
+                className="text-xs text-emerald-600 hover:text-emerald-700"
               >
                 + Toevoegen
               </button>
-              <Link href="/transcripts" className="text-sm text-blue-600 hover:text-blue-800">
+              <Link href="/transcripts" className="text-xs text-sky-600 hover:text-sky-700">
                 Bekijk alle
               </Link>
             </div>
           </div>
-          <div className="divide-y divide-gray-100">
-            {recent.transcripts.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">
-                Nog geen transcripties
-              </div>
-            ) : (
-              recent.transcripts.map((t) => (
+
+          {recent.transcripts.length === 0 ? (
+            <p className="text-sm text-slate-500 py-4 text-center">Nog geen transcripties</p>
+          ) : (
+            <div className="space-y-2">
+              {recent.transcripts.map((t) => (
                 <Link
                   key={t.id}
                   href={`/transcripts/${t.id}`}
-                  className="block p-4 hover:bg-gray-50 transition-colors"
+                  className="block p-3 rounded-lg hover:bg-slate-50 transition-colors"
                 >
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {t.title || t.filename}
-                  </p>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-                    <span>{formatDuration(t.duration)}</span>
-                    <span>{new Date(t.createdAt).toLocaleDateString('nl-NL')}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded ${
-                        t.status === 'completed'
-                          ? 'bg-green-100 text-green-700'
-                          : t.status === 'processing'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {t.status}
+                  <div className="flex items-start justify-between">
+                    <p className="text-sm text-slate-900 truncate">
+                      {t.title || t.filename}
+                    </p>
+                    <span className={`badge ${
+                      t.status === 'completed' ? 'badge-success' :
+                      t.status === 'processing' ? 'badge-accent' : 'badge-neutral'
+                    }`}>
+                      {t.status === 'completed' ? 'Voltooid' : t.status === 'processing' ? 'Bezig' : t.status}
                     </span>
                   </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
+                    <span>{formatDuration(t.duration)}</span>
+                    <span>•</span>
+                    <span>{new Date(t.createdAt).toLocaleDateString('nl-NL')}</span>
+                  </div>
                 </Link>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Reports */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Verslagen</h3>
-          <Link
-            href={`/projects/${project.id}/reports`}
-            className="text-sm text-blue-600 hover:text-blue-800"
-          >
-            Bekijk alle
-          </Link>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {recent.reports.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 text-sm">
-              Nog geen verslagen. Genereer een verslag vanuit een transcriptie.
+              ))}
             </div>
-          ) : (
-            recent.reports.map((r) => (
-              <Link
-                key={r.id}
-                href={`/projects/${project.id}/reports/${r.id}`}
-                className="block p-4 hover:bg-gray-50 transition-colors"
-              >
-                <p className="text-sm font-medium text-gray-900">{r.title}</p>
-                <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-                    {r.type === 'meeting' ? 'Vergadering' : r.type === 'weekly' ? 'Weekoverzicht' : 'Samenvatting'}
-                  </span>
-                  <span>{new Date(r.createdAt).toLocaleDateString('nl-NL')}</span>
-                </div>
-              </Link>
-            ))
           )}
         </div>
       </div>
 
+      {/* Recent Reports */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-slate-900">Verslagen</h3>
+          <Link
+            href={`/projects/${project.id}/reports`}
+            className="text-xs text-sky-600 hover:text-sky-700"
+          >
+            Bekijk alle
+          </Link>
+        </div>
+
+        {recent.reports.length === 0 ? (
+          <p className="text-sm text-slate-500 py-4 text-center">
+            Nog geen verslagen
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {recent.reports.map((r) => (
+              <Link
+                key={r.id}
+                href={`/projects/${project.id}/reports/${r.id}`}
+                className="block p-3 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-900">{r.title}</p>
+                  <span className="badge badge-neutral">
+                    {r.type === 'meeting' ? 'Vergadering' : r.type === 'weekly' ? 'Weekoverzicht' : 'Samenvatting'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  {new Date(r.createdAt).toLocaleDateString('nl-NL')}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Add Transcripts Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Transcripties toevoegen</h3>
-              <p className="text-sm text-gray-500 mt-1">
+            <div className="p-4 border-b border-slate-200">
+              <h3 className="text-sm font-medium text-slate-900">Transcripties toevoegen</h3>
+              <p className="text-xs text-slate-500 mt-1">
                 Selecteer transcripties om aan dit project toe te voegen
               </p>
             </div>
@@ -291,13 +299,12 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
             <div className="flex-1 overflow-y-auto p-4">
               {loadingTranscripts ? (
                 <div className="text-center py-8">
-                  <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-                  <p className="mt-2 text-sm text-gray-500">Laden...</p>
+                  <div className="w-6 h-6 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin mx-auto"></div>
+                  <p className="mt-2 text-sm text-slate-500">Laden...</p>
                 </div>
               ) : unlinkedTranscripts.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>Geen ongekoppelde transcripties gevonden</p>
-                  <p className="text-sm mt-1">Alle transcripties zijn al aan een project gekoppeld</p>
+                <div className="text-center py-8 text-slate-500">
+                  <p className="text-sm">Geen ongekoppelde transcripties</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -306,22 +313,23 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
                       key={t.id}
                       className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
                         selectedTranscripts.includes(t.id)
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:bg-gray-50'
+                          ? 'border-sky-400 bg-sky-50'
+                          : 'border-slate-200 hover:bg-slate-50'
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={selectedTranscripts.includes(t.id)}
                         onChange={() => handleToggleTranscript(t.id)}
-                        className="h-4 w-4 text-blue-600 rounded border-gray-300"
+                        className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                       />
                       <div className="ml-3 flex-1">
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm text-slate-900">
                           {t.title || t.filename}
                         </p>
-                        <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                        <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                           <span>{formatDuration(t.duration)}</span>
+                          <span>•</span>
                           <span>{new Date(t.createdAt).toLocaleDateString('nl-NL')}</span>
                         </div>
                       </div>
@@ -331,21 +339,19 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                className="btn-secondary"
               >
                 Annuleren
               </button>
               <button
                 onClick={handleAddTranscripts}
                 disabled={selectedTranscripts.length === 0 || addingTranscripts}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary disabled:opacity-50"
               >
-                {addingTranscripts
-                  ? 'Toevoegen...'
-                  : `Toevoegen (${selectedTranscripts.length})`}
+                {addingTranscripts ? 'Toevoegen...' : `Toevoegen (${selectedTranscripts.length})`}
               </button>
             </div>
           </div>
