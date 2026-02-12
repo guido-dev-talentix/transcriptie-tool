@@ -88,31 +88,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORG-01 | — | Pending |
-| ORG-02 | — | Pending |
-| ORG-03 | — | Pending |
-| ORG-04 | — | Pending |
-| ORG-05 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
-| VERW-01 | — | Pending |
-| VERW-02 | — | Pending |
-| VERW-03 | — | Pending |
-| VERW-04 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| SAME-01 | — | Pending |
-| SAME-02 | — | Pending |
-| SAME-03 | — | Pending |
+| ORG-01 | Phase 1 | Pending |
+| ORG-02 | Phase 1 | Pending |
+| ORG-03 | Phase 1 | Pending |
+| ORG-04 | Phase 2 | Pending |
+| ORG-05 | Phase 2 | Pending |
+| DASH-01 | Phase 1 | Pending |
+| DASH-02 | Phase 1 | Pending |
+| DASH-03 | Phase 1 | Pending |
+| DASH-04 | Phase 1 | Pending |
+| VERW-01 | Phase 1 | Pending |
+| VERW-02 | Phase 2 | Pending |
+| VERW-03 | Phase 2 | Pending |
+| VERW-04 | Phase 2 | Pending |
+| INTG-01 | Phase 3 | Pending |
+| INTG-02 | Phase 3 | Pending |
+| INTG-03 | Phase 3 | Pending |
+| SAME-01 | Phase 4 | Pending |
+| SAME-02 | Phase 4 | Pending |
+| SAME-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-12*
-*Last updated: 2026-02-12 after initial definition*
+*Last updated: 2026-02-12 after roadmap creation*
