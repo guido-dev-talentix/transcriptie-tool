@@ -23,21 +23,55 @@ model Transcript {
   cleanedText String?
   projectId   String?
   summary     String?
+  aiStatus    String?      // null = not started, "processing" = in progress, "completed" = done, "error" = failed
+  aiError     String?
   actionItems ActionItem[]
+  decisions   Decision[]
   reports     Report[]
   project     Project?     @relation(fields: [projectId], references: [id])
 }
 
+model User {
+  id        String        @id
+  email     String        @unique
+  role      String        @default("USER") // 'ADMIN' or 'USER'
+  approved  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  projects  UserProject[]
+}
+
 model Project {
-  id          String       @id @default(cuid())
-  name        String
-  description String?
-  status      String       @default("active")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  actionItems ActionItem[]
-  reports     Report[]
-  transcripts Transcript[]
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  status          String        @default("active")
+  statusSummary   String?       // Stand van Zaken - cumulatieve AI-gegenereerde projectstatus
+  statusUpdatedAt DateTime?     // Wanneer de SVZ voor het laatst is bijgewerkt
+  parentId        String?       // For nested folders/projects
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  parent          Project?      @relation("ProjectHierarchy", fields: [parentId], references: [id])
+  children        Project[]     @relation("ProjectHierarchy")
+  
+  actionItems     ActionItem[]
+  decisions       Decision[]
+  reports         Report[]
+  transcripts     Transcript[]
+  users           UserProject[]
+}
+
+model UserProject {
+  userId    String
+  projectId String
+  role      String   @default("MEMBER") // 'OWNER', 'ADMIN', 'MEMBER', 'VIEWER'
+  assignedAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
 }
 
 model Report {
@@ -72,6 +106,22 @@ model ActionItem {
   reportId     String?
   project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   report       Report?     @relation(fields: [reportId], references: [id])
+  transcript   Transcript? @relation(fields: [transcriptId], references: [id])
+}
+
+model Decision {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  context      String?
+  status       String      @default("active")
+  madeBy       String?
+  sourceType   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  projectId    String
+  transcriptId String?
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   transcript   Transcript? @relation(fields: [transcriptId], references: [id])
 }
 

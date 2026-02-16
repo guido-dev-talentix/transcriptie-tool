@@ -18,6 +18,10 @@ export async function GET(request: NextRequest) {
         language: true,
         createdAt: true,
         projectId: true,
+        aiStatus: true,
+        project: {
+          select: { id: true, name: true },
+        },
       },
     })
 

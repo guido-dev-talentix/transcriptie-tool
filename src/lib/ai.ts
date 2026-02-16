@@ -4,17 +4,91 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+function parseAIJsonResponse<T>(responseText: string): T {
+  let jsonString = responseText
+
+  // Remove markdown code blocks if present
+  const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (codeBlockMatch) {
+    jsonString = codeBlockMatch[1].trim()
+  } else {
+    const startMatch = responseText.match(/```(?:json)?\s*([\s\S]*)/)
+    if (startMatch) {
+      jsonString = startMatch[1].trim()
+      jsonString = jsonString.replace(/```\s*$/, '').trim()
+    }
+  }
+
+  // Extract JSON object - find the outermost { and }
+  const firstBrace = jsonString.indexOf('{')
+  const lastBrace = jsonString.lastIndexOf('}')
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    console.error('AI response could not be parsed. Response:', responseText.substring(0, 500))
+    throw new Error('Kon AI response niet parsen')
+  }
+
+  const jsonContent = jsonString.substring(firstBrace, lastBrace + 1)
+
+  try {
+    return JSON.parse(jsonContent) as T
+  } catch (parseError) {
+    console.error('JSON parse error:', parseError, 'JSON string:', jsonContent.substring(0, 500))
+    throw new Error('Kon AI response JSON niet parsen')
+  }
+}
+
+// Pricing per million tokens (Claude Sonnet)
+const PRICING = { input: 3.0, output: 15.0 }
+
+// Helper: streaming call that returns the final text + stop_reason
+async function streamMessage(params: {
+  system: string
+  userPrompt: string
+  max_tokens: number
+  label?: string
+}): Promise<{ text: string; stopReason: string | null }> {
+  const startTime = Date.now()
+
+  const stream = anthropic.messages.stream({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: params.max_tokens,
+    messages: [
+      {
+        role: 'user',
+        content: params.userPrompt,
+      },
+    ],
+    system: params.system,
+  })
+
+  const message = await stream.finalMessage()
+  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+
+  const durationSec = ((Date.now() - startTime) / 1000).toFixed(1)
+  const inputTokens = message.usage.input_tokens
+  const outputTokens = message.usage.output_tokens
+  const costInput = (inputTokens / 1_000_000) * PRICING.input
+  const costOutput = (outputTokens / 1_000_000) * PRICING.output
+  const costTotal = costInput + costOutput
+
+  console.log(
+    `[AI ${params.label || 'call'}] ${durationSec}s | ` +
+    `input: ${inputTokens} tokens ($${costInput.toFixed(4)}) | ` +
+    `output: ${outputTokens} tokens ($${costOutput.toFixed(4)}) | ` +
+    `totaal: $${costTotal.toFixed(4)}`
+  )
+
+  return { text, stopReason: message.stop_reason }
+}
+
 export interface ProcessedTranscript {
   cleanedText: string
   summary: string
-  actionItems: ExtractedActionItem[]
 }
 
-export interface ExtractedActionItem {
-  title: string
-  description?: string
-  priority: 'low' | 'medium' | 'high'
-  assignee?: string
+export interface StatusUpdate {
+  statusSummary: string
 }
 
 export interface GeneratedReport {
@@ -28,7 +102,7 @@ export async function processTranscript(
 ): Promise<ProcessedTranscript> {
   const systemPrompt = `Je bent een expert in het verbeteren en opschonen van ruwe transcripties voor een software development team bij Talentix.
 
-Je hebt drie taken:
+Je hebt twee taken:
 
 ## TAAK 1: OPGESCHOONDE TEKST (cleanedText)
 Dit is je BELANGRIJKSTE taak. Maak een VOLLEDIGE, UITGEBREIDE opgeschoonde versie van de transcriptie.
@@ -52,25 +126,11 @@ Belangrijke regels voor opschonen:
 ## TAAK 2: SAMENVATTING (summary)
 Maak een beknopte samenvatting van 3-5 zinnen met de belangrijkste punten uit het gesprek.
 
-## TAAK 3: ACTIEPUNTEN (actionItems)
-Extraheer concrete actiepunten uit de tekst. Let op:
-- Alleen echte actiepunten met duidelijke taken
-- Geef prioriteit aan op basis van urgentie/belangrijkheid
-- Noteer de toegewezen persoon als die genoemd wordt
-
 Reageer ALTIJD in het Nederlands.
 Geef je antwoord in het volgende JSON formaat:
 {
   "cleanedText": "De VOLLEDIGE opgeschoonde versie van de transcriptie met alle inhoud behouden...",
-  "summary": "Een beknopte samenvatting van 3-5 zinnen...",
-  "actionItems": [
-    {
-      "title": "Korte actie titel",
-      "description": "Optionele uitgebreide beschrijving",
-      "priority": "low|medium|high",
-      "assignee": "Naam indien genoemd"
-    }
-  ]
+  "summary": "Een beknopte samenvatting van 3-5 zinnen..."
 }`
 
   const userPrompt = `${context?.projectName ? `Project: ${context.projectName}\n` : ''}${context?.meetingType ? `Type: ${context.meetingType}\n` : ''}
@@ -78,28 +138,152 @@ Verwerk de volgende transcriptie:
 
 ${text}`
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 8192,
-    messages: [
-      {
-        role: 'user',
-        content: userPrompt,
-      },
-    ],
+  const { text: responseText, stopReason } = await streamMessage({
     system: systemPrompt,
+    userPrompt,
+    max_tokens: 32768,
+    label: 'processTranscript',
   })
 
-  const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
-
-  // Parse JSON from response
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error('Kon AI response niet parsen')
+  if (stopReason === 'max_tokens') {
+    console.error('processTranscript response was truncated (max_tokens reached)')
+    throw new Error('AI response werd afgekapt - transcriptie is mogelijk te lang')
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as ProcessedTranscript
-  return parsed
+  return parseAIJsonResponse<ProcessedTranscript>(responseText)
+}
+
+export async function generateStatusUpdate(
+  previousSVZ: string | null,
+  newTranscriptContent: string,
+  projectName: string
+): Promise<StatusUpdate> {
+  const isFirst = !previousSVZ
+
+  const systemPrompt = `Je bent een AI-assistent die een cumulatieve "Stand van Zaken" (projectstatus) bijhoudt voor projecten bij Talentix.
+
+${isFirst ? `Dit is de EERSTE transcriptie voor dit project. Maak een initiële Stand van Zaken op basis van de inhoud.` : `Er is al een bestaande Stand van Zaken. Werk deze bij met de nieuwe informatie uit de laatste transcriptie. Behoud relevante bestaande informatie en voeg nieuwe inzichten toe. Verwijder informatie die achterhaald is door nieuwe ontwikkelingen.`}
+
+De Stand van Zaken moet in Markdown geschreven zijn en de volgende structuur volgen:
+- **Huidige status**: Korte beschrijving van waar het project staat
+- **Belangrijkste punten**: De kernpunten en lopende zaken
+- **Recente ontwikkelingen**: Wat er laatst is besproken/besloten
+- **Openstaande vragen/risico's**: Eventuele aandachtspunten
+
+Houd het beknopt maar informatief. Schrijf in het Nederlands.
+
+Geef je antwoord in het volgende JSON formaat:
+{
+  "statusSummary": "De volledige Stand van Zaken in Markdown..."
+}`
+
+  const userPrompt = `Project: ${projectName}
+
+${previousSVZ ? `Huidige Stand van Zaken:\n${previousSVZ}\n\n` : ''}Nieuwe transcriptie inhoud:
+${newTranscriptContent}`
+
+  const { text: responseText } = await streamMessage({
+    system: systemPrompt,
+    userPrompt,
+    max_tokens: 4096,
+    label: 'generateStatusUpdate',
+  })
+
+  return parseAIJsonResponse<StatusUpdate>(responseText)
+}
+
+export interface ExtractedActionItems {
+  actionItems: { title: string; description: string; priority: string; assignee: string | null }[]
+}
+
+export interface ExtractedDecisions {
+  decisions: { title: string; description: string; context: string; madeBy: string | null }[]
+}
+
+export async function extractActionItems(
+  text: string,
+  context?: { projectName?: string }
+): Promise<ExtractedActionItems> {
+  const systemPrompt = `Je bent een expert in het analyseren van vergadertranscripties en het identificeren van actiepunten, taken en to-do items.
+
+Analyseer de gegeven tekst en extraheer alle actiepunten, taken, toezeggingen en to-do items die worden genoemd.
+
+Voor elk actiepunt:
+- title: Korte, duidelijke titel van het actiepunt
+- description: Meer detail over wat er gedaan moet worden
+- priority: "high", "medium" of "low" - gebaseerd op urgentie en belang
+- assignee: De naam van de persoon die verantwoordelijk is (als genoemd), anders null
+
+Reageer ALTIJD in het Nederlands.
+Geef je antwoord in het volgende JSON formaat:
+{
+  "actionItems": [
+    {
+      "title": "Korte titel",
+      "description": "Gedetailleerde beschrijving",
+      "priority": "high|medium|low",
+      "assignee": "Naam of null"
+    }
+  ]
+}
+
+Als er geen actiepunten gevonden worden, geef dan een lege array terug.`
+
+  const userPrompt = `${context?.projectName ? `Project: ${context.projectName}\n\n` : ''}Extraheer alle actiepunten uit de volgende tekst:
+
+${text}`
+
+  const { text: responseText } = await streamMessage({
+    system: systemPrompt,
+    userPrompt,
+    max_tokens: 4096,
+    label: 'extractActionItems',
+  })
+
+  return parseAIJsonResponse<ExtractedActionItems>(responseText)
+}
+
+export async function extractDecisions(
+  text: string,
+  context?: { projectName?: string }
+): Promise<ExtractedDecisions> {
+  const systemPrompt = `Je bent een expert in het analyseren van vergadertranscripties en het identificeren van besluiten, afspraken en conclusies.
+
+Analyseer de gegeven tekst en extraheer alle besluiten, afspraken, akkoorden en conclusies die worden genoemd.
+
+Voor elk besluit:
+- title: Korte, duidelijke titel van het besluit
+- description: Wat er precies is besloten
+- context: Waarom dit besluit is genomen (achtergrond/motivatie)
+- madeBy: De naam van de persoon die het besluit heeft genomen (als identificeerbaar), anders null
+
+Reageer ALTIJD in het Nederlands.
+Geef je antwoord in het volgende JSON formaat:
+{
+  "decisions": [
+    {
+      "title": "Korte titel",
+      "description": "Wat is besloten",
+      "context": "Waarom dit besluit is genomen",
+      "madeBy": "Naam of null"
+    }
+  ]
+}
+
+Als er geen besluiten gevonden worden, geef dan een lege array terug.`
+
+  const userPrompt = `${context?.projectName ? `Project: ${context.projectName}\n\n` : ''}Extraheer alle besluiten en afspraken uit de volgende tekst:
+
+${text}`
+
+  const { text: responseText } = await streamMessage({
+    system: systemPrompt,
+    userPrompt,
+    max_tokens: 4096,
+    label: 'extractDecisions',
+  })
+
+  return parseAIJsonResponse<ExtractedDecisions>(responseText)
 }
 
 export async function generateReport(
@@ -142,26 +326,12 @@ Transcriptie:
 ${transcript.cleanedText || transcript.text}
 ${actionItemsText}`
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
-    messages: [
-      {
-        role: 'user',
-        content: userPrompt,
-      },
-    ],
+  const { text: responseText } = await streamMessage({
     system: systemPrompt,
+    userPrompt,
+    max_tokens: 4096,
+    label: 'generateReport',
   })
 
-  const responseText = message.content[0].type === 'text' ? message.content[0].text : ''
-
-  // Parse JSON from response
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error('Kon AI response niet parsen')
-  }
-
-  const parsed = JSON.parse(jsonMatch[0]) as GeneratedReport
-  return parsed
+  return parseAIJsonResponse<GeneratedReport>(responseText)
 }

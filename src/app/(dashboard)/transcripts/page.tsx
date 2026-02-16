@@ -10,6 +10,7 @@ interface Transcript {
   status: string
   duration: number | null
   createdAt: string
+  aiStatus: string | null
   project?: {
     id: string
     name: string
@@ -20,23 +21,38 @@ export default function TranscriptsPage() {
   const [transcripts, setTranscripts] = useState<Transcript[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchTranscripts = async () => {
-      try {
-        const response = await fetch('/api/transcripts')
-        if (response.ok) {
-          const data = await response.json()
-          setTranscripts(data)
-        }
-      } catch (err) {
-        console.error('Failed to fetch transcripts:', err)
-      } finally {
-        setLoading(false)
+  const fetchTranscripts = async () => {
+    try {
+      const response = await fetch('/api/transcripts')
+      if (response.ok) {
+        const data = await response.json()
+        setTranscripts(data)
       }
+    } catch (err) {
+      console.error('Failed to fetch transcripts:', err)
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     fetchTranscripts()
   }, [])
+
+  // Poll for updates when any transcript is processing
+  useEffect(() => {
+    const hasProcessing = transcripts.some(
+      t => t.status === 'processing' || t.status === 'pending' || t.aiStatus === 'processing'
+    )
+
+    if (!hasProcessing) return
+
+    const interval = setInterval(() => {
+      fetchTranscripts()
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [transcripts])
 
   const formatDuration = (seconds: number | null) => {
     if (!seconds) return '-'
@@ -63,6 +79,43 @@ export default function TranscriptsPage() {
         {labels[status] || status}
       </span>
     )
+  }
+
+  const getAIStatusIndicator = (aiStatus: string | null) => {
+    if (!aiStatus) return null
+
+    if (aiStatus === 'processing') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-brand-light-blue/10 text-brand-light-blue text-xs font-medium">
+          <span className="w-2 h-2 rounded-full bg-brand-light-blue animate-pulse"></span>
+          AI verwerkt
+        </span>
+      )
+    }
+
+    if (aiStatus === 'completed') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 text-xs font-medium">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          AI klaar
+        </span>
+      )
+    }
+
+    if (aiStatus === 'error') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-cta-red/10 text-cta-red text-xs font-medium">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          AI fout
+        </span>
+      )
+    }
+
+    return null
   }
 
   if (loading) {
@@ -100,8 +153,8 @@ export default function TranscriptsPage() {
                 className="block p-4 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">
                       {t.title || t.filename}
                     </p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
@@ -112,7 +165,10 @@ export default function TranscriptsPage() {
                       )}
                     </div>
                   </div>
-                  {getStatusBadge(t.status)}
+                  <div className="flex items-center gap-2 ml-4">
+                    {getAIStatusIndicator(t.aiStatus)}
+                    {getStatusBadge(t.status)}
+                  </div>
                 </div>
               </Link>
             ))}

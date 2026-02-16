@@ -19,6 +19,8 @@ interface Transcript {
   summary: string | null
   projectId: string | null
   project?: { id: string; name: string } | null
+  aiStatus: string | null
+  aiError: string | null
 }
 
 interface Project {
@@ -43,11 +45,13 @@ export default function TranscriptView({ id }: { id: string }) {
   const [sendingToN8n, setSendingToN8n] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState('')
-  const [processingAI, setProcessingAI] = useState(false)
-  const [generatingReport, setGeneratingReport] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
   const [showAISection, setShowAISection] = useState(false)
+  const [optExtractActionItems, setOptExtractActionItems] = useState(true)
+  const [optExtractDecisions, setOptExtractDecisions] = useState(true)
+  const [optGenerateReport, setOptGenerateReport] = useState(false)
+  const [aiResultCounts, setAiResultCounts] = useState<{ actionItems?: number; decisions?: number } | null>(null)
 
   const fetchTranscript = async () => {
     try {
@@ -61,6 +65,11 @@ export default function TranscriptView({ id }: { id: string }) {
       }
       const data = await response.json()
       setTranscript(data)
+
+      // Show AI section when processing completes
+      if (data.aiStatus === 'completed' && (data.summary || data.cleanedText)) {
+        setShowAISection(true)
+      }
     } catch (err) {
       setError('Kon transcriptie niet laden')
     } finally {
@@ -73,6 +82,7 @@ export default function TranscriptView({ id }: { id: string }) {
     fetchProjects()
   }, [id])
 
+  // Poll for transcription status
   useEffect(() => {
     if (transcript?.status !== 'processing' && transcript?.status !== 'pending') {
       return
@@ -84,6 +94,46 @@ export default function TranscriptView({ id }: { id: string }) {
 
     return () => clearInterval(interval)
   }, [id, transcript?.status])
+
+  // Poll for AI processing status
+  useEffect(() => {
+    if (transcript?.aiStatus !== 'processing') {
+      return
+    }
+
+    const interval = setInterval(async () => {
+      await fetchTranscript()
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [id, transcript?.aiStatus])
+
+  // Fetch result counts when AI completes
+  useEffect(() => {
+    if (transcript?.aiStatus !== 'completed' || aiResultCounts) return
+
+    const fetchCounts = async () => {
+      const counts: { actionItems?: number; decisions?: number } = {}
+      try {
+        const [aiRes, decRes] = await Promise.all([
+          fetch(`/api/action-items?transcriptId=${id}`),
+          fetch(`/api/decisions?transcriptId=${id}`),
+        ])
+        if (aiRes.ok) {
+          const items = await aiRes.json()
+          counts.actionItems = items.length
+        }
+        if (decRes.ok) {
+          const items = await decRes.json()
+          counts.decisions = items.length
+        }
+        setAiResultCounts(counts)
+      } catch {
+        // ignore
+      }
+    }
+    fetchCounts()
+  }, [id, transcript?.aiStatus])
 
   const fetchProjects = async () => {
     try {
@@ -136,7 +186,8 @@ export default function TranscriptView({ id }: { id: string }) {
       return
     }
 
-    setProcessingAI(true)
+    setAiResultCounts(null)
+
     try {
       const response = await fetch('/api/ai/process-transcript', {
         method: 'POST',
@@ -144,6 +195,11 @@ export default function TranscriptView({ id }: { id: string }) {
         body: JSON.stringify({
           transcriptId: transcript.id,
           projectId: selectedProjectId,
+          options: {
+            extractActionItems: optExtractActionItems,
+            extractDecisions: optExtractDecisions,
+            generateReport: optGenerateReport,
+          },
         }),
       })
 
@@ -152,48 +208,15 @@ export default function TranscriptView({ id }: { id: string }) {
         throw new Error(data.error || 'AI verwerking mislukt')
       }
 
-      const result = await response.json()
+      // Update local state to show processing
       setTranscript({
         ...transcript,
-        cleanedText: result.transcript.cleanedText,
-        summary: result.transcript.summary,
+        aiStatus: 'processing',
+        aiError: null,
         projectId: selectedProjectId,
       })
-      setShowAISection(true)
-      alert(`AI verwerking voltooid! ${result.actionItems.length} actiepunten geëxtraheerd.`)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'AI verwerking mislukt')
-    } finally {
-      setProcessingAI(false)
-    }
-  }
-
-  const handleGenerateReport = async () => {
-    if (!transcript || !selectedProjectId) return
-
-    setGeneratingReport(true)
-    try {
-      const response = await fetch('/api/ai/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcriptId: transcript.id,
-          projectId: selectedProjectId,
-          type: 'meeting',
-        }),
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Verslag genereren mislukt')
-      }
-
-      const result = await response.json()
-      router.push(`/projects/${selectedProjectId}`)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Verslag genereren mislukt')
-    } finally {
-      setGeneratingReport(false)
     }
   }
 
@@ -382,6 +405,62 @@ export default function TranscriptView({ id }: { id: string }) {
           <div className="bg-brand-light-blue/15 border-2 border-brand-light-blue/20 rounded-2xl p-6">
             <h3 className="text-lg font-display font-semibold text-primary mb-5">AI Verwerking</h3>
 
+            {/* AI Processing Progress */}
+            {transcript.aiStatus === 'processing' && (
+              <div className="mb-5 bg-white rounded-xl p-5 border border-brand-light-blue/30">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full border-4 border-slate-200 border-t-brand-light-blue animate-spin flex-shrink-0"></div>
+                  <div className="flex-1">
+                    <p className="font-display font-semibold text-primary">AI verwerking bezig...</p>
+                    <p className="text-sm text-slate font-body mt-1">
+                      De transcriptie wordt geanalyseerd. Je kunt ondertussen doorgaan met andere taken.
+                    </p>
+                    {/* Progress bar animation */}
+                    <div className="mt-3 h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-brand-light-blue rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AI Error */}
+            {transcript.aiStatus === 'error' && (
+              <div className="mb-5 bg-cta-red/10 border border-cta-red/20 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-cta-red flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="font-display font-semibold text-cta-red">AI verwerking mislukt</p>
+                    <p className="text-sm text-cta-red/80 font-body mt-1">
+                      {transcript.aiError || 'Er is een onbekende fout opgetreden'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AI Completed Success Message */}
+            {transcript.aiStatus === 'completed' && !showAISection && (
+              <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-xl p-5">
+                <div className="flex items-center gap-3">
+                  <svg className="w-6 h-6 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <div>
+                    <p className="font-display font-semibold text-emerald-700">AI verwerking voltooid!</p>
+                    <button
+                      onClick={() => setShowAISection(true)}
+                      className="text-sm text-emerald-600 hover:text-emerald-700 font-body mt-1 underline"
+                    >
+                      Bekijk resultaten
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Project selector */}
             <div className="mb-5">
               <label className="block text-sm font-display font-semibold text-primary mb-2">
@@ -392,6 +471,7 @@ export default function TranscriptView({ id }: { id: string }) {
                   value={selectedProjectId}
                   onChange={(e) => setSelectedProjectId(e.target.value)}
                   className="input flex-1"
+                  disabled={transcript.aiStatus === 'processing'}
                 >
                   <option value="">Geen project</option>
                   {projects.map((p) => (
@@ -401,7 +481,7 @@ export default function TranscriptView({ id }: { id: string }) {
                 {selectedProjectId !== (transcript.projectId || '') && (
                   <button
                     onClick={handleSaveProject}
-                    disabled={savingProject}
+                    disabled={savingProject || transcript.aiStatus === 'processing'}
                     className="btn-secondary whitespace-nowrap"
                   >
                     {savingProject ? 'Opslaan...' : 'Opslaan'}
@@ -415,35 +495,80 @@ export default function TranscriptView({ id }: { id: string }) {
               )}
             </div>
 
+            {/* AI Options */}
+            {selectedProjectId && (
+              <div className="mb-5 space-y-2">
+                <label className="block text-sm font-display font-semibold text-primary mb-2">Opties</label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={optExtractActionItems}
+                    onChange={(e) => setOptExtractActionItems(e.target.checked)}
+                    disabled={transcript.aiStatus === 'processing'}
+                    className="rounded border-slate-300 text-brand-light-blue focus:ring-brand-light-blue"
+                  />
+                  <span className="text-sm text-slate font-body">Actiepunten extraheren</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={optExtractDecisions}
+                    onChange={(e) => setOptExtractDecisions(e.target.checked)}
+                    disabled={transcript.aiStatus === 'processing'}
+                    className="rounded border-slate-300 text-brand-light-blue focus:ring-brand-light-blue"
+                  />
+                  <span className="text-sm text-slate font-body">Besluiten extraheren</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={optGenerateReport}
+                    onChange={(e) => setOptGenerateReport(e.target.checked)}
+                    disabled={transcript.aiStatus === 'processing'}
+                    className="rounded border-slate-300 text-brand-light-blue focus:ring-brand-light-blue"
+                  />
+                  <span className="text-sm text-slate font-body">Verslag genereren</span>
+                </label>
+              </div>
+            )}
+
+            {/* AI Result Counts */}
+            {transcript.aiStatus === 'completed' && aiResultCounts && (
+              <div className="mb-5 flex flex-wrap gap-2">
+                {aiResultCounts.actionItems !== undefined && aiResultCounts.actionItems > 0 && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-display font-semibold rounded-full border border-blue-200">
+                    {aiResultCounts.actionItems} actiepunt{aiResultCounts.actionItems !== 1 ? 'en' : ''}
+                  </span>
+                )}
+                {aiResultCounts.decisions !== undefined && aiResultCounts.decisions > 0 && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 text-xs font-display font-semibold rounded-full border border-purple-200">
+                    {aiResultCounts.decisions} besluit{aiResultCounts.decisions !== 1 ? 'en' : ''}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleProcessWithAI}
-                disabled={processingAI || !selectedProjectId}
+                disabled={transcript.aiStatus === 'processing' || !selectedProjectId}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
               >
-                {processingAI ? (
+                {transcript.aiStatus === 'processing' ? (
                   <>
                     <div className="w-4 h-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin mr-2"></div>
                     Verwerken...
                   </>
+                ) : transcript.aiStatus === 'completed' ? (
+                  'Opnieuw verwerken'
                 ) : (
                   'Verwerk met AI'
                 )}
               </button>
-
-              {(transcript.cleanedText || transcript.summary) && (
-                <button
-                  onClick={handleGenerateReport}
-                  disabled={generatingReport || !selectedProjectId}
-                  className="btn-dark disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {generatingReport ? 'Genereren...' : 'Genereer Verslag'}
-                </button>
-              )}
             </div>
 
             {/* AI Results */}
-            {(transcript.summary || transcript.cleanedText) && (
+            {(transcript.summary || transcript.cleanedText) && showAISection && (
               <div className="mt-6 space-y-4">
                 {transcript.summary && (
                   <div className="bg-white rounded-xl p-5 border border-slate-200">
@@ -457,17 +582,15 @@ export default function TranscriptView({ id }: { id: string }) {
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-sm font-display font-semibold text-primary">Opgeschoonde Tekst</h4>
                       <button
-                        onClick={() => setShowAISection(!showAISection)}
+                        onClick={() => setShowAISection(false)}
                         className="text-sm font-display font-semibold text-brand-light-blue hover:text-accent-hover transition-colors"
                       >
-                        {showAISection ? 'Verbergen' : 'Tonen'}
+                        Verbergen
                       </button>
                     </div>
-                    {showAISection && (
-                      <p className="text-body-l text-slate font-body font-light whitespace-pre-wrap max-h-64 overflow-y-auto">
-                        {transcript.cleanedText}
-                      </p>
-                    )}
+                    <p className="text-body-l text-slate font-body font-light whitespace-pre-wrap max-h-64 overflow-y-auto">
+                      {transcript.cleanedText}
+                    </p>
                   </div>
                 )}
               </div>

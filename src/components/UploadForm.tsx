@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { upload } from '@vercel/blob/client'
 
 interface TranscriptResult {
@@ -13,16 +13,16 @@ interface TranscriptResult {
   language?: string
 }
 
-interface SavedDestination {
-  id: string
-  label: string
-  type: 'slack' | 'gmail'
-  address: string
-}
-
 interface Project {
   id: string
   name: string
+}
+
+interface AiResults {
+  summary?: string
+  actionItemCount?: number
+  decisionCount?: number
+  reportId?: string
 }
 
 export default function UploadForm() {
@@ -32,31 +32,38 @@ export default function UploadForm() {
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [result, setResult] = useState<TranscriptResult | null>(null)
   const [isCopied, setIsCopied] = useState(false)
-  const [isSendingToN8N, setIsSendingToN8N] = useState(false)
-  const [n8nSuccess, setN8nSuccess] = useState(false)
-  const [isExpanded, setIsExpanded] = useState(false)
 
   const [uploadType, setUploadType] = useState<'audio' | 'pdf'>('audio')
   const [title, setTitle] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
 
-  const [savedDestinations, setSavedDestinations] = useState<SavedDestination[]>([])
-  const [selectedDestinationId, setSelectedDestinationId] = useState<string>('new')
-  const [newDestinationType, setNewDestinationType] = useState<'slack' | 'gmail'>('slack')
-  const [newDestinationAddress, setNewDestinationAddress] = useState('')
-  const [saveDestination, setSaveDestination] = useState(false)
-  const [newDestinationLabel, setNewDestinationLabel] = useState('')
-  const [isSavingDestination, setIsSavingDestination] = useState(false)
+  // Post-upload state
+  const [editableTitle, setEditableTitle] = useState('')
+  const [postProjectId, setPostProjectId] = useState<string>('')
+  const [isAiProcessing, setIsAiProcessing] = useState(false)
+  const [aiStatus, setAiStatus] = useState<'processing' | 'completed' | 'error' | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [optExtractActionItems, setOptExtractActionItems] = useState(true)
+  const [optExtractDecisions, setOptExtractDecisions] = useState(true)
+  const [optGenerateReport, setOptGenerateReport] = useState(false)
+  const [aiResults, setAiResults] = useState<AiResults>({})
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    fetchSavedDestinations()
     fetchProjects()
 
     const params = new URLSearchParams(window.location.search)
     const projectId = params.get('projectId')
     if (projectId) {
       setSelectedProjectId(projectId)
+    }
+  }, [])
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
     }
   }, [])
 
@@ -72,39 +79,10 @@ export default function UploadForm() {
     }
   }
 
-  const fetchSavedDestinations = async () => {
-    try {
-      const response = await fetch('/api/saved-destinations')
-      if (response.ok) {
-        const data = await response.json()
-        setSavedDestinations(data)
-      }
-    } catch (err) {
-      console.error('Failed to fetch saved destinations:', err)
-    }
-  }
-
-  const handleDeleteDestination = async (id: string) => {
-    try {
-      const response = await fetch(`/api/saved-destinations/${id}`, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        setSavedDestinations(prev => prev.filter(d => d.id !== id))
-        if (selectedDestinationId === id) {
-          setSelectedDestinationId('new')
-        }
-      }
-    } catch (err) {
-      console.error('Failed to delete destination:', err)
-    }
-  }
-
   const handleAudioUpload = async (file: File) => {
     setError(null)
     setResult(null)
     setIsUploading(true)
-    setIsExpanded(false)
 
     try {
       setUploadProgress('Uploaden...')
@@ -134,6 +112,8 @@ export default function UploadForm() {
       }
 
       setResult(data)
+      setEditableTitle(data.title || data.filename.replace(/\.[^/.]+$/, ''))
+      setPostProjectId(selectedProjectId)
       setUploadProgress(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Er is iets misgegaan')
@@ -146,7 +126,6 @@ export default function UploadForm() {
     setError(null)
     setResult(null)
     setIsUploading(true)
-    setIsExpanded(false)
 
     try {
       setUploadProgress('PDF verwerken...')
@@ -168,6 +147,8 @@ export default function UploadForm() {
       }
 
       setResult(data)
+      setEditableTitle(data.title || data.filename.replace(/\.[^/.]+$/, ''))
+      setPostProjectId(selectedProjectId)
       setUploadProgress(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Er is iets misgegaan')
@@ -217,81 +198,141 @@ export default function UploadForm() {
       await navigator.clipboard.writeText(result.text)
       setIsCopied(true)
       setTimeout(() => setIsCopied(false), 2000)
-    } catch (err) {
+    } catch {
       setError('Kopiëren mislukt')
     }
   }
 
-  const handleSendToN8N = async () => {
+  const handleTitleSave = async () => {
+    if (!result || editableTitle.trim() === (result.title || '')) return
+    try {
+      const response = await fetch(`/api/transcripts/${result.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editableTitle.trim() }),
+      })
+      if (response.ok) {
+        setResult({ ...result, title: editableTitle.trim() })
+      }
+    } catch (err) {
+      console.error('Failed to save title:', err)
+    }
+  }
+
+  const handleProjectChange = async (newProjectId: string) => {
+    setPostProjectId(newProjectId)
+    if (!result) return
+    try {
+      await fetch(`/api/transcripts/${result.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: newProjectId || null }),
+      })
+    } catch (err) {
+      console.error('Failed to update project:', err)
+    }
+  }
+
+  const handleStartAiProcessing = async () => {
     if (!result) return
 
-    let destinationType: 'slack' | 'gmail' | undefined
-    let destinationAddress: string | undefined
+    setIsAiProcessing(true)
+    setAiStatus('processing')
+    setAiError(null)
+    setAiResults({})
 
-    if (selectedDestinationId === 'new') {
-      if (newDestinationAddress.trim()) {
-        destinationType = newDestinationType
-        destinationAddress = newDestinationAddress.trim()
-
-        if (saveDestination && newDestinationLabel.trim()) {
-          setIsSavingDestination(true)
-          try {
-            const saveResponse = await fetch('/api/saved-destinations', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                label: newDestinationLabel.trim(),
-                type: newDestinationType,
-                address: newDestinationAddress.trim(),
-              }),
-            })
-            if (saveResponse.ok) {
-              await fetchSavedDestinations()
-              setSaveDestination(false)
-              setNewDestinationLabel('')
-            }
-          } catch (err) {
-            console.error('Failed to save destination:', err)
-          } finally {
-            setIsSavingDestination(false)
-          }
-        }
-      }
-    } else {
-      const selectedDest = savedDestinations.find(d => d.id === selectedDestinationId)
-      if (selectedDest) {
-        destinationType = selectedDest.type
-        destinationAddress = selectedDest.address
-      }
-    }
-
-    setIsSendingToN8N(true)
-    setN8nSuccess(false)
     try {
-      const response = await fetch('/api/send-to-n8n', {
+      const response = await fetch('/api/ai/process-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transcriptId: result.id,
-          filename: result.filename,
-          title: result.title || title.trim() || undefined,
-          status: 'completed',
-          text: result.text,
-          duration: result.duration,
-          destinationType,
-          destinationAddress,
+          projectId: postProjectId || undefined,
+          options: {
+            extractActionItems: optExtractActionItems,
+            extractDecisions: optExtractDecisions,
+            generateReport: optGenerateReport,
+          },
         }),
       })
+
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Verzenden naar N8N mislukt')
+        throw new Error(data.error || 'AI verwerking mislukt')
       }
-      setN8nSuccess(true)
-      setTimeout(() => setN8nSuccess(false), 3000)
+
+      // Start polling
+      pollingRef.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/transcripts/${result.id}`)
+          if (pollRes.ok) {
+            const transcript = await pollRes.json()
+            if (transcript.aiStatus === 'completed') {
+              if (pollingRef.current) clearInterval(pollingRef.current)
+              pollingRef.current = null
+              setAiStatus('completed')
+              setIsAiProcessing(false)
+
+              const results: AiResults = {
+                summary: transcript.summary,
+              }
+
+              // Fetch counts
+              if (optExtractActionItems) {
+                try {
+                  const aiRes = await fetch(`/api/action-items?transcriptId=${result.id}`)
+                  if (aiRes.ok) {
+                    const items = await aiRes.json()
+                    results.actionItemCount = items.length
+                  }
+                } catch { /* ignore */ }
+              }
+              if (optExtractDecisions) {
+                try {
+                  const decRes = await fetch(`/api/decisions?transcriptId=${result.id}`)
+                  if (decRes.ok) {
+                    const items = await decRes.json()
+                    results.decisionCount = items.length
+                  }
+                } catch { /* ignore */ }
+              }
+
+              setAiResults(results)
+            } else if (transcript.aiStatus === 'error') {
+              if (pollingRef.current) clearInterval(pollingRef.current)
+              pollingRef.current = null
+              setAiStatus('error')
+              setAiError(transcript.aiError || 'Onbekende fout')
+              setIsAiProcessing(false)
+            }
+          }
+        } catch {
+          // polling error, continue
+        }
+      }, 5000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verzenden naar N8N mislukt')
-    } finally {
-      setIsSendingToN8N(false)
+      setAiStatus('error')
+      setAiError(err instanceof Error ? err.message : 'AI verwerking mislukt')
+      setIsAiProcessing(false)
+    }
+  }
+
+  const handleNewTranscript = () => {
+    setResult(null)
+    setTitle('')
+    setSelectedProjectId('')
+    setEditableTitle('')
+    setPostProjectId('')
+    setAiStatus(null)
+    setAiError(null)
+    setAiResults({})
+    setIsAiProcessing(false)
+    setOptExtractActionItems(true)
+    setOptExtractDecisions(true)
+    setOptGenerateReport(false)
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
     }
   }
 
@@ -364,48 +405,50 @@ export default function UploadForm() {
       )}
 
       {/* Drop Zone */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        className={`
-          relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
-          ${isDragging
-            ? 'border-sky-400 bg-sky-50'
-            : 'border-slate-300 hover:border-slate-400 bg-white'
-          }
-          ${isUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}
-        `}
-      >
-        <input
-          type="file"
-          accept={uploadType === 'pdf' ? '.pdf,application/pdf' : '.mp3,.wav,.m4a,.mp4,audio/*,video/mp4'}
-          onChange={handleFileSelect}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          disabled={isUploading}
-        />
+      {!result && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          className={`
+            relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
+            ${isDragging
+              ? 'border-sky-400 bg-sky-50'
+              : 'border-slate-300 hover:border-slate-400 bg-white'
+            }
+            ${isUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}
+          `}
+        >
+          <input
+            type="file"
+            accept={uploadType === 'pdf' ? '.pdf,application/pdf' : '.mp3,.wav,.m4a,.mp4,audio/*,video/mp4'}
+            onChange={handleFileSelect}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            disabled={isUploading}
+          />
 
-        <div className="space-y-3">
-          {isUploading ? (
-            <>
-              <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin mx-auto" />
-              <p className="text-sm text-slate-600">{uploadProgress}</p>
-            </>
-          ) : (
-            <>
-              <svg className="w-8 h-8 text-slate-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <div>
-                <p className="text-sm text-slate-600">
-                  Sleep een bestand hierheen of{' '}
-                  <span className="text-sky-600 font-medium">klik om te selecteren</span>
-                </p>
-              </div>
-            </>
-          )}
+          <div className="space-y-3">
+            {isUploading ? (
+              <>
+                <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin mx-auto" />
+                <p className="text-sm text-slate-600">{uploadProgress}</p>
+              </>
+            ) : (
+              <>
+                <svg className="w-8 h-8 text-slate-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <div>
+                  <p className="text-sm text-slate-600">
+                    Sleep een bestand hierheen of{' '}
+                    <span className="text-sky-600 font-medium">klik om te selecteren</span>
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -414,138 +457,151 @@ export default function UploadForm() {
         </div>
       )}
 
-      {/* Results */}
+      {/* Post-upload Results */}
       {result && (
-        <div className="mt-6 space-y-4">
-          {/* Destination selector */}
+        <div className="space-y-4">
+          {/* Title + Duration */}
           <div className="card">
-            <h3 className="text-sm font-medium text-slate-900 mb-3">Verstuur naar</h3>
-
-            <div className="space-y-3">
-              <select
-                value={selectedDestinationId}
-                onChange={(e) => setSelectedDestinationId(e.target.value)}
-                className="input"
-              >
-                <option value="new">+ Nieuwe bestemming</option>
-                {savedDestinations.map((dest) => (
-                  <option key={dest.id} value={dest.id}>
-                    {dest.label} ({dest.type})
-                  </option>
-                ))}
-              </select>
-
-              {selectedDestinationId !== 'new' && (
-                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg text-sm">
-                  <span className="text-slate-600">
-                    {savedDestinations.find(d => d.id === selectedDestinationId)?.address}
-                  </span>
-                  <button
-                    onClick={() => handleDeleteDestination(selectedDestinationId)}
-                    className="text-red-600 hover:text-red-700 text-sm"
-                  >
-                    Verwijderen
-                  </button>
-                </div>
-              )}
-
-              {selectedDestinationId === 'new' && (
-                <div className="space-y-3 pt-3 border-t border-slate-200">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
-                      <select
-                        value={newDestinationType}
-                        onChange={(e) => setNewDestinationType(e.target.value as 'slack' | 'gmail')}
-                        className="input"
-                      >
-                        <option value="slack">Slack</option>
-                        <option value="gmail">Gmail</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        {newDestinationType === 'slack' ? 'Kanaal' : 'E-mail'}
-                      </label>
-                      <input
-                        type={newDestinationType === 'gmail' ? 'email' : 'text'}
-                        value={newDestinationAddress}
-                        onChange={(e) => setNewDestinationAddress(e.target.value)}
-                        placeholder={newDestinationType === 'slack' ? '#algemeen' : 'email@voorbeeld.nl'}
-                        className="input"
-                      />
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={saveDestination}
-                      onChange={(e) => setSaveDestination(e.target.checked)}
-                      className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                    />
-                    <span className="text-sm text-slate-600">Bewaar voor later</span>
-                  </label>
-
-                  {saveDestination && (
-                    <input
-                      type="text"
-                      value={newDestinationLabel}
-                      onChange={(e) => setNewDestinationLabel(e.target.value)}
-                      placeholder="Label (bijv. Werk Slack)"
-                      className="input"
-                    />
-                  )}
-                </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                value={editableTitle}
+                onChange={(e) => setEditableTitle(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleTitleSave() }}
+                className="flex-1 text-base font-medium text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-sky-500 focus:outline-none px-1 py-0.5 transition-colors"
+                placeholder="Titel invoeren..."
+              />
+              {result.duration && (
+                <span className="badge badge-neutral whitespace-nowrap">
+                  {Math.floor(result.duration / 60)}:{String(Math.floor(result.duration % 60)).padStart(2, '0')}
+                </span>
               )}
             </div>
           </div>
 
-          {/* Send button */}
-          <button
-            onClick={handleSendToN8N}
-            disabled={isSendingToN8N || isSavingDestination}
-            className={`w-full py-3 text-sm font-medium rounded-lg transition-colors ${
-              n8nSuccess
-                ? 'bg-emerald-500 text-white'
-                : 'bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50'
-            }`}
-          >
-            {isSendingToN8N ? 'Verzenden...' : n8nSuccess ? 'Verzonden!' : 'Verstuur naar n8n'}
-          </button>
-
-          {/* Transcript Card */}
+          {/* Project selector */}
           <div className="card">
-            <div className="flex items-start justify-between mb-3">
-              <h2 className="text-sm font-medium text-slate-900">
-                {result.title || 'Transcriptie'}
-              </h2>
-              <div className="flex gap-2 text-xs">
-                {result.duration && (
-                  <span className="badge badge-neutral">
-                    {Math.floor(result.duration / 60)}:{String(Math.floor(result.duration % 60)).padStart(2, '0')}
-                  </span>
-                )}
+            <label className="block text-sm font-medium text-slate-700 mb-2">Project</label>
+            <select
+              value={postProjectId}
+              onChange={(e) => handleProjectChange(e.target.value)}
+              disabled={isAiProcessing}
+              className="input"
+            >
+              <option value="">Geen project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* AI Processing Section */}
+          {postProjectId && (
+            <div className="card">
+              <h3 className="text-sm font-medium text-slate-900 mb-3">AI Verwerking</h3>
+
+              {/* Options checkboxes */}
+              <div className="space-y-2 mb-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={optExtractActionItems}
+                    onChange={(e) => setOptExtractActionItems(e.target.checked)}
+                    disabled={isAiProcessing}
+                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <span className="text-sm text-slate-700">Actiepunten extraheren</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={optExtractDecisions}
+                    onChange={(e) => setOptExtractDecisions(e.target.checked)}
+                    disabled={isAiProcessing}
+                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <span className="text-sm text-slate-700">Besluiten extraheren</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={optGenerateReport}
+                    onChange={(e) => setOptGenerateReport(e.target.checked)}
+                    disabled={isAiProcessing}
+                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <span className="text-sm text-slate-700">Verslag genereren</span>
+                </label>
               </div>
+
+              {/* Start button */}
+              {!aiStatus && (
+                <button
+                  onClick={handleStartAiProcessing}
+                  disabled={isAiProcessing}
+                  className="w-full py-2.5 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                >
+                  Verwerk met AI
+                </button>
+              )}
+
+              {/* Processing state */}
+              {aiStatus === 'processing' && (
+                <div className="flex items-center gap-3 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                  <div className="w-5 h-5 rounded-full border-2 border-sky-200 border-t-sky-500 animate-spin flex-shrink-0" />
+                  <span className="text-sm text-sky-700">AI verwerking bezig... Dit kan even duren.</span>
+                </div>
+              )}
+
+              {/* Completed state */}
+              {aiStatus === 'completed' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-sm font-medium text-emerald-700">AI verwerking voltooid</span>
+                    </div>
+                    {aiResults.summary && (
+                      <p className="text-sm text-emerald-700 mt-1">{aiResults.summary}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {aiResults.actionItemCount !== undefined && aiResults.actionItemCount > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200">
+                        {aiResults.actionItemCount} actiepunt{aiResults.actionItemCount !== 1 ? 'en' : ''} geëxtraheerd
+                      </span>
+                    )}
+                    {aiResults.decisionCount !== undefined && aiResults.decisionCount > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-full border border-purple-200">
+                        {aiResults.decisionCount} besluit{aiResults.decisionCount !== 1 ? 'en' : ''} geëxtraheerd
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Error state */}
+              {aiStatus === 'error' && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{aiError || 'Er is een fout opgetreden'}</p>
+                  <button
+                    onClick={() => { setAiStatus(null); setAiError(null) }}
+                    className="mt-2 text-sm text-red-700 underline hover:no-underline"
+                  >
+                    Opnieuw proberen
+                  </button>
+                </div>
+              )}
             </div>
+          )}
 
-            <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
-              {isExpanded
-                ? result.text
-                : result.text.substring(0, 300) + (result.text.length > 300 ? '...' : '')
-              }
-            </p>
-
-            {result.text.length > 300 && (
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-3 text-sm text-sky-600 hover:text-sky-700"
-              >
-                {isExpanded ? 'Minder weergeven' : 'Meer weergeven'}
-              </button>
-            )}
-
-            <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200">
+          {/* Transcript Card - Full text */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-slate-900">Transcriptie</h2>
               <button
                 onClick={handleCopyText}
                 className={`btn-secondary text-sm ${isCopied ? 'text-emerald-600 border-emerald-300' : ''}`}
@@ -553,6 +609,10 @@ export default function UploadForm() {
                 {isCopied ? 'Gekopieerd!' : 'Kopieer tekst'}
               </button>
             </div>
+
+            <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+              {result.text}
+            </p>
           </div>
 
           {/* SRT Section */}
@@ -583,23 +643,21 @@ export default function UploadForm() {
             </div>
           )}
 
-          {/* New Upload Button */}
-          <button
-            onClick={() => {
-              setResult(null)
-              setIsExpanded(false)
-              setTitle('')
-              setSelectedProjectId('')
-              setSelectedDestinationId('new')
-              setNewDestinationType('slack')
-              setNewDestinationAddress('')
-              setSaveDestination(false)
-              setNewDestinationLabel('')
-            }}
-            className="w-full btn-secondary"
-          >
-            Nieuwe transcriptie
-          </button>
+          {/* Action buttons */}
+          <div className="flex gap-3">
+            <a
+              href={`/transcripts/${result.id}`}
+              className="flex-1 btn-secondary text-center"
+            >
+              Bekijk details
+            </a>
+            <button
+              onClick={handleNewTranscript}
+              className="flex-1 btn-secondary"
+            >
+              Nieuwe transcriptie
+            </button>
+          </div>
         </div>
       )}
     </div>

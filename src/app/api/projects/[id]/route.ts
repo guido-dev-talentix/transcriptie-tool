@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { checkProjectAccess } from '@/lib/auth'
 
 // GET /api/projects/[id] - Get single project
 export async function GET(
@@ -8,6 +9,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+
+    const access = await checkProjectAccess(id)
+    if (access instanceof NextResponse) return access
 
     const project = await prisma.project.findUnique({
       where: { id },
@@ -59,6 +63,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
+
+    const access = await checkProjectAccess(id, ['OWNER', 'ADMIN', 'MEMBER'])
+    if (access instanceof NextResponse) return access
+
     const body = await request.json()
     const { name, description, status } = body
 
@@ -110,6 +118,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+
+    const access = await checkProjectAccess(id, ['OWNER', 'ADMIN'])
+    if (access instanceof NextResponse) return access
 
     await prisma.project.delete({
       where: { id },

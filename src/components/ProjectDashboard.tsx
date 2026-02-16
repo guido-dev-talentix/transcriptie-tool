@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import ReactMarkdown from 'react-markdown'
 import ActionItemList from './ActionItemList'
+import DecisionList from './DecisionList'
 
 interface UnlinkedTranscript {
   id: string
@@ -18,6 +20,8 @@ interface DashboardData {
     name: string
     description: string | null
     status: string
+    statusSummary: string | null
+    statusUpdatedAt: string | null
     createdAt: string
     updatedAt: string
   }
@@ -28,6 +32,12 @@ interface DashboardData {
       open: number
       inProgress: number
       done: number
+      total: number
+    }
+    decisions: {
+      active: number
+      superseded: number
+      revoked: number
       total: number
     }
   }
@@ -57,6 +67,15 @@ interface DashboardData {
       createdAt: string
       description: string | null
     }>
+    decisions: Array<{
+      id: string
+      title: string
+      description: string | null
+      context: string | null
+      status: string
+      madeBy: string | null
+      createdAt: string
+    }>
   }
 }
 
@@ -68,6 +87,7 @@ interface ProjectDashboardProps {
 export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardProps) {
   const { project, stats, recent } = data
   const [actionItems, setActionItems] = useState(recent.actionItems)
+  const [decisions, setDecisions] = useState(recent.decisions || [])
   const [showAddModal, setShowAddModal] = useState(false)
   const [unlinkedTranscripts, setUnlinkedTranscripts] = useState<UnlinkedTranscript[]>([])
   const [selectedTranscripts, setSelectedTranscripts] = useState<string[]>([])
@@ -142,6 +162,24 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
     onRefresh()
   }
 
+  const handleDecisionStatusChange = (id: string, newStatus: string) => {
+    if (newStatus !== 'active') {
+      setDecisions((prev) => prev.filter((item) => item.id !== id))
+    } else {
+      setDecisions((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+      )
+    }
+    onRefresh()
+  }
+
+  const handleDecisionUpdate = (id: string, updates: Partial<DashboardData['recent']['decisions'][0]>) => {
+    setDecisions((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    )
+    onRefresh()
+  }
+
   const formatDuration = (seconds: number | null) => {
     if (!seconds) return '-'
     const mins = Math.floor(seconds / 60)
@@ -158,7 +196,7 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <div className="card text-center">
           <p className="text-2xl font-semibold text-slate-900">{stats.totalTranscripts}</p>
           <p className="text-xs text-slate-500 mt-1">Transcripties</p>
@@ -175,7 +213,34 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
           <p className="text-2xl font-semibold text-emerald-600">{stats.actionItems.done}</p>
           <p className="text-xs text-slate-500 mt-1">Afgerond</p>
         </div>
+        <div className="card text-center">
+          <p className="text-2xl font-semibold text-sky-600">{stats.decisions?.active || 0}</p>
+          <p className="text-xs text-slate-500 mt-1">Besluiten</p>
+        </div>
       </div>
+
+      {/* Stand van Zaken */}
+      {project.statusSummary && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-900">Stand van Zaken</h3>
+            {project.statusUpdatedAt && (
+              <span className="text-xs text-slate-400">
+                Bijgewerkt op {new Date(project.statusUpdatedAt).toLocaleDateString('nl-NL', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
+          </div>
+          <div className="prose prose-sm prose-slate max-w-none">
+            <ReactMarkdown>{project.statusSummary}</ReactMarkdown>
+          </div>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Action Items */}
@@ -196,6 +261,26 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
           />
         </div>
 
+        {/* Recent Decisions */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-slate-900">Recente Besluiten</h3>
+            <Link
+              href={`/projects/${project.id}/decisions`}
+              className="text-xs text-sky-600 hover:text-sky-700"
+            >
+              Bekijk alle
+            </Link>
+          </div>
+          <DecisionList
+            decisions={decisions}
+            onStatusChange={handleDecisionStatusChange}
+            onItemUpdate={handleDecisionUpdate}
+          />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
         {/* Recent Transcripts */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -244,10 +329,9 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
             </div>
           )}
         </div>
-      </div>
 
-      {/* Recent Reports */}
-      <div className="card">
+        {/* Recent Reports */}
+        <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium text-slate-900">Verslagen</h3>
           <Link
@@ -283,6 +367,7 @@ export default function ProjectDashboard({ data, onRefresh }: ProjectDashboardPr
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* Add Transcripts Modal */}

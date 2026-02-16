@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { sortActionItems } from '@/lib/sorting'
+import { sortDecisions } from '@/lib/sorting'
 import { checkProjectAccess } from '@/lib/auth'
 
-// GET /api/projects/[id]/action-items - List action items for a project
+// GET /api/projects/[id]/decisions - List decisions for a project
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -26,26 +26,23 @@ export async function GET(
       )
     }
 
-    const actionItems = await prisma.actionItem.findMany({
+    const decisions = await prisma.decision.findMany({
       where: { projectId: id },
       include: {
         transcript: {
           select: { id: true, title: true, filename: true },
         },
-        report: {
-          select: { id: true, title: true },
-        },
       },
     })
 
-    // Sort with custom priority order: high → medium → low
-    const sortedItems = sortActionItems(actionItems)
+    // Sort decisions: active first, then by createdAt desc
+    const sortedDecisions = sortDecisions(decisions)
 
-    return NextResponse.json(sortedItems)
+    return NextResponse.json(sortedDecisions)
   } catch (error) {
-    console.error('Error fetching project action items:', error)
+    console.error('Error fetching project decisions:', error)
     return NextResponse.json(
-      { error: 'Kon actiepunten niet ophalen' },
+      { error: 'Kon besluiten niet ophalen' },
       { status: 500 }
     )
   }

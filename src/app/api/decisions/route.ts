@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { sortActionItems } from '@/lib/sorting'
+import { sortDecisions } from '@/lib/sorting'
 
-// GET /api/action-items - List action items
+// GET /api/decisions - List decisions
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const projectId = searchParams.get('projectId')
     const transcriptId = searchParams.get('transcriptId')
     const status = searchParams.get('status')
-    const priority = searchParams.get('priority')
 
-    const where: { projectId?: string; transcriptId?: string; status?: string; priority?: string } = {}
+    const where: { projectId?: string; transcriptId?: string; status?: string } = {}
     if (projectId) where.projectId = projectId
     if (transcriptId) where.transcriptId = transcriptId
     if (status) where.status = status
-    if (priority) where.priority = priority
 
-    const actionItems = await prisma.actionItem.findMany({
+    const decisions = await prisma.decision.findMany({
       where,
       include: {
         project: {
@@ -26,38 +24,33 @@ export async function GET(request: NextRequest) {
         transcript: {
           select: { id: true, title: true, filename: true },
         },
-        report: {
-          select: { id: true, title: true },
-        },
       },
     })
 
-    // Sort with custom priority order: high → medium → low
-    const sortedItems = sortActionItems(actionItems)
+    // Sort decisions: active first, then by createdAt desc
+    const sortedDecisions = sortDecisions(decisions)
 
-    return NextResponse.json(sortedItems)
+    return NextResponse.json(sortedDecisions)
   } catch (error) {
-    console.error('Error fetching action items:', error)
+    console.error('Error fetching decisions:', error)
     return NextResponse.json(
-      { error: 'Kon actiepunten niet ophalen' },
+      { error: 'Kon besluiten niet ophalen' },
       { status: 500 }
     )
   }
 }
 
-// POST /api/action-items - Create action item manually
+// POST /api/decisions - Create decision manually
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const {
       title,
       description,
-      priority = 'medium',
-      assignee,
-      dueDate,
+      context,
+      madeBy,
       projectId,
       transcriptId,
-      reportId,
     } = body
 
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -74,32 +67,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!['low', 'medium', 'high'].includes(priority)) {
-      return NextResponse.json(
-        { error: 'Ongeldige prioriteit' },
-        { status: 400 }
-      )
-    }
-
-    const actionItem = await prisma.actionItem.create({
+    const decision = await prisma.decision.create({
       data: {
         title: title.trim(),
         description: description?.trim() || null,
-        priority,
-        assignee: assignee?.trim() || null,
-        dueDate: dueDate ? new Date(dueDate) : null,
+        context: context?.trim() || null,
+        madeBy: madeBy?.trim() || null,
         sourceType: 'manual',
         projectId,
         transcriptId: transcriptId || null,
-        reportId: reportId || null,
       },
     })
 
-    return NextResponse.json(actionItem, { status: 201 })
+    return NextResponse.json(decision, { status: 201 })
   } catch (error) {
-    console.error('Error creating action item:', error)
+    console.error('Error creating decision:', error)
     return NextResponse.json(
-      { error: 'Kon actiepunt niet aanmaken' },
+      { error: 'Kon besluit niet aanmaken' },
       { status: 500 }
     )
   }

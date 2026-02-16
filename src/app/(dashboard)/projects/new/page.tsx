@@ -1,15 +1,18 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function NewProjectPage() {
+function NewProjectForm() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const searchParams = useSearchParams()
+  const parentId = searchParams.get('parentId')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,6 +32,7 @@ export default function NewProjectPage() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
+          parentId: parentId || null,
         }),
       })
 
@@ -105,5 +109,13 @@ export default function NewProjectPage() {
         </div>
       </form>
     </div>
+  )
+}
+
+export default function NewProjectPage() {
+  return (
+    <Suspense fallback={<div className="p-8">Laden...</div>}>
+      <NewProjectForm />
+    </Suspense>
   )
 }
