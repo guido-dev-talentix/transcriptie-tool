@@ -26,11 +26,11 @@ Search X is a working meeting intelligence tool that needs polish, not a rebuild
   2. Bij openen van een project ziet de gebruiker direct de cumulatieve "Stand van Zaken", open actiepunten, recente besluiten en recente vergaderingen op het dashboard
   3. De upload flow toont duidelijke verwerkingsopties (transcript, besluiten, actiepunten, verslag) met verbeterde UX ten opzichte van de huidige situatie
   4. Projectenlijst toont mappen met hun projecten erin, en losse projecten daarbuiten
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Mappenstructuur (data model, API, UI voor mappen in projectenlijst)
-- [ ] 01-02: Projectdashboard en upload flow polish
+- [ ] 01-01-PLAN.md -- Folder data model, API endpoints, projects list with folders/drag-and-drop/context menu
+- [ ] 01-02-PLAN.md -- Project dashboard restructured with SVZ hero, upload flow with pre-upload processing options
 
 ### Phase 2: Actiepunten & Zoeken
 **Goal**: Gebruikers kunnen actiepunten beheren (status, toewijzing, filtering) en full-text zoeken over alle transcripties binnen een project
