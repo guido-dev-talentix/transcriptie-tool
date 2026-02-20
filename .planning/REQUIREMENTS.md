@@ -9,9 +9,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Organisatie
 
-- [ ] **ORG-01**: Gebruiker kan mappen aanmaken om projecten te groeperen (1 laag diep)
-- [ ] **ORG-02**: Gebruiker kan projecten verplaatsen naar een map
-- [ ] **ORG-03**: Gebruiker kan mappen hernoemen en verwijderen
+- [x] **ORG-01**: Gebruiker kan mappen aanmaken om projecten te groeperen (1 laag diep)
+- [x] **ORG-02**: Gebruiker kan projecten verplaatsen naar een map
+- [x] **ORG-03**: Gebruiker kan mappen hernoemen en verwijderen
 - [ ] **ORG-04**: Gebruiker kan full-text zoeken over alle transcripties binnen een project
 - [ ] **ORG-05**: Zoekresultaten tonen transcriptnaam, datum en relevante tekstfragmenten
 
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORG-01 | Phase 1 | Pending |
-| ORG-02 | Phase 1 | Pending |
-| ORG-03 | Phase 1 | Pending |
+| ORG-01 | Phase 1 | Complete |
+| ORG-02 | Phase 1 | Complete |
+| ORG-03 | Phase 1 | Complete |
 | ORG-04 | Phase 2 | Pending |
 | ORG-05 | Phase 2 | Pending |
 | DASH-01 | Phase 1 | Pending |
