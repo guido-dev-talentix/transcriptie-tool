@@ -2,20 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { createClient } from '@/lib/supabase/server'
 
-// GET /api/projects - List all projects
-export async function GET(request: NextRequest) {
+// GET /api/projects - List folders and root projects in structured format
+export async function GET() {
   try {
-    const searchParams = request.nextUrl.searchParams
-    const status = searchParams.get('status')
-    const parentId = searchParams.get('parentId')
-
-    // If parentId is 'null' string or not present, we assume root (null)
-    // But if we want to fetch specific folder's children, we pass parentId
-    // If we want ALL projects (optional), we might need a flag, but for hierarchy default is root.
-
-    // Let's decide: if parentId param is provided, filter by it.
-    // If NOT provided, filter by parentId: null (root projects).
-
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -32,48 +21,51 @@ export async function GET(request: NextRequest) {
     })
 
     if (!dbUser && user.email) {
-      // Fallback: try matching by email (e.g. for manually created admins)
       dbUser = await prisma.user.findUnique({
         where: { email: user.email },
         select: { role: true },
       })
     }
 
-    const where: any = {}
-    if (status) where.status = status
+    const isAdmin = dbUser?.role === 'ADMIN'
+    const roleFilter = isAdmin ? {} : { users: { some: { userId: user.id } } }
 
-    if (parentId && parentId !== 'null') {
-      where.parentId = parentId
-    } else {
-      where.parentId = null
-    }
-
-    // Role-based filtering
-    if (dbUser?.role !== 'ADMIN') {
-      where.users = {
-        some: {
-          userId: user.id
-        }
-      }
-    }
-
-    const projects = await prisma.project.findMany({
-      where,
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        _count: {
-          select: {
-            transcripts: true,
-            reports: true,
-            actionItems: {
-              where: { status: { not: 'done' } },
+    const [folders, projects] = await Promise.all([
+      prisma.folder.findMany({
+        where: { userId: user.id },
+        orderBy: { name: 'asc' },
+        include: {
+          projects: {
+            where: roleFilter,
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              updatedAt: true,
             },
           },
+          _count: {
+            select: { projects: true },
+          },
         },
-      },
-    })
+      }),
+      prisma.project.findMany({
+        where: {
+          ...roleFilter,
+          folderId: null,
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          updatedAt: true,
+        },
+      }),
+    ])
 
-    return NextResponse.json(projects)
+    return NextResponse.json({ folders, projects })
   } catch (error) {
     console.error('Error fetching projects:', error)
     return NextResponse.json(
@@ -87,7 +79,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, description, parentId } = body
+    const { name, description, folderId } = body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json(
@@ -96,11 +88,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate folder exists if folderId provided
+    if (folderId) {
+      const folder = await prisma.folder.findUnique({
+        where: { id: folderId },
+      })
+      if (!folder) {
+        return NextResponse.json(
+          { error: 'Map niet gevonden' },
+          { status: 404 }
+        )
+      }
+    }
+
     const project = await prisma.project.create({
       data: {
         name: name.trim(),
         description: description?.trim() || null,
-        parentId: parentId || null,
+        folderId: folderId || null,
       },
     })
 

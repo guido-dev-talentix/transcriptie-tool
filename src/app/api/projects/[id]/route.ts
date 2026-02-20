@@ -68,9 +68,9 @@ export async function PATCH(
     if (access instanceof NextResponse) return access
 
     const body = await request.json()
-    const { name, description, status } = body
+    const { name, description, status, folderId } = body
 
-    const updateData: { name?: string; description?: string; status?: string } = {}
+    const updateData: { name?: string; description?: string; status?: string; folderId?: string | null } = {}
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
@@ -94,6 +94,23 @@ export async function PATCH(
         )
       }
       updateData.status = status
+    }
+
+    if (folderId !== undefined) {
+      if (folderId === null) {
+        updateData.folderId = null
+      } else {
+        const folder = await prisma.folder.findUnique({
+          where: { id: folderId },
+        })
+        if (!folder) {
+          return NextResponse.json(
+            { error: 'Map niet gevonden' },
+            { status: 404 }
+          )
+        }
+        updateData.folderId = folderId
+      }
     }
 
     const project = await prisma.project.update({

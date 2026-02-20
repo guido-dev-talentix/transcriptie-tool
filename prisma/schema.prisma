@@ -39,6 +39,7 @@ model User {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   projects  UserProject[]
+  folders   Folder[]
 }
 
 model Project {
@@ -48,18 +49,28 @@ model Project {
   status          String        @default("active")
   statusSummary   String?       // Stand van Zaken - cumulatieve AI-gegenereerde projectstatus
   statusUpdatedAt DateTime?     // Wanneer de SVZ voor het laatst is bijgewerkt
-  parentId        String?       // For nested folders/projects
+  folderId        String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-  
-  parent          Project?      @relation("ProjectHierarchy", fields: [parentId], references: [id])
-  children        Project[]     @relation("ProjectHierarchy")
-  
+
+  folder          Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   actionItems     ActionItem[]
   decisions       Decision[]
   reports         Report[]
   transcripts     Transcript[]
   users           UserProject[]
+}
+
+model Folder {
+  id        String    @id @default(cuid())
+  name      String
+  userId    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects  Project[]
 }
 
 model UserProject {

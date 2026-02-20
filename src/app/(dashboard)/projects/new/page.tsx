@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 function NewProjectForm() {
@@ -10,9 +10,6 @@ function NewProjectForm() {
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const searchParams = useSearchParams()
-  const parentId = searchParams.get('parentId')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,7 +29,6 @@ function NewProjectForm() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
-          parentId: parentId || null,
         }),
       })
 

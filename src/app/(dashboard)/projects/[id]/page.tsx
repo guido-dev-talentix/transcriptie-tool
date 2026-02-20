@@ -75,7 +75,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const { id } = use(params)
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
-  const [subProjects, setSubProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditingStatus, setIsEditingStatus] = useState(false)
@@ -115,21 +114,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }
   }
 
-  const fetchSubProjects = async () => {
-    try {
-      const response = await fetch(`/api/projects?parentId=${id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setSubProjects(data)
-      }
-    } catch (err) {
-      console.error('Failed to fetch sub-projects', err)
-    }
-  }
-
   useEffect(() => {
     fetchDashboard()
-    fetchSubProjects()
   }, [id])
 
   const handleStatusChange = async (newStatus: string) => {
@@ -278,43 +264,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Sub Projects (Folders) */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium text-slate-900">Mappen</h2>
-          <Link
-            href={`/projects/new?parentId=${data.project.id}`}
-            className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-          >
-            + Nieuwe map
-          </Link>
-        </div>
-
-        {subProjects.length === 0 ? (
-          <p className="text-sm text-slate-500">Geen submappen</p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {subProjects.map((sub) => (
-              <Link
-                key={sub.id}
-                href={`/projects/${sub.id}`}
-                className="block p-4 border rounded-lg hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <svg className="w-8 h-8 text-indigo-200" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19.764 5.574C19.349 4.673 18.528 4 17.5 4H7.5C6.12 4 5 5.12 5 6.5v11c0 1.38 1.12 2.5 2.5 2.5h9c1.028 0 1.849-.673 2.264-1.574l2-4.502a2.5 2.5 0 00-2.264-3.426H5.5V6.5a1 1 0 011-1h11a1 1 0 011 1v2.5h2.264a2.5 2.5 0 002.264-2.5v-.5a.5.5 0 00-.264-.426l-2-1z" />
-                  </svg>
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-900">{sub.name}</h3>
-                    <p className="text-xs text-slate-500">{new Date(sub.updatedAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Dashboard */}
