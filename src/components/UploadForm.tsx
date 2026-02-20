@@ -38,17 +38,21 @@ export default function UploadForm() {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
 
+  // Pre-upload processing options
+  const [optCleanTranscript, setOptCleanTranscript] = useState(true)
+  const [optExtractActionItems, setOptExtractActionItems] = useState(false)
+  const [optExtractDecisions, setOptExtractDecisions] = useState(false)
+  const [optGenerateReport, setOptGenerateReport] = useState(false)
+
   // Post-upload state
   const [editableTitle, setEditableTitle] = useState('')
   const [postProjectId, setPostProjectId] = useState<string>('')
   const [isAiProcessing, setIsAiProcessing] = useState(false)
   const [aiStatus, setAiStatus] = useState<'processing' | 'completed' | 'error' | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
-  const [optExtractActionItems, setOptExtractActionItems] = useState(true)
-  const [optExtractDecisions, setOptExtractDecisions] = useState(true)
-  const [optGenerateReport, setOptGenerateReport] = useState(false)
   const [aiResults, setAiResults] = useState<AiResults>({})
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const autoProcessRef = useRef(false)
 
   useEffect(() => {
     fetchProjects()
@@ -67,6 +71,14 @@ export default function UploadForm() {
     }
   }, [])
 
+  // Auto-trigger AI processing after upload completes
+  useEffect(() => {
+    if (result && autoProcessRef.current) {
+      autoProcessRef.current = false
+      handleStartAiProcessing()
+    }
+  }, [result])
+
   const fetchProjects = async () => {
     try {
       const response = await fetch('/api/projects?status=active')
@@ -83,6 +95,10 @@ export default function UploadForm() {
     setError(null)
     setResult(null)
     setIsUploading(true)
+
+    // Determine if auto-processing should happen after upload
+    const shouldAutoProcess = optCleanTranscript || optExtractActionItems || optExtractDecisions || optGenerateReport
+    autoProcessRef.current = shouldAutoProcess
 
     try {
       setUploadProgress('Uploaden...')
@@ -116,6 +132,7 @@ export default function UploadForm() {
       setPostProjectId(selectedProjectId)
       setUploadProgress(null)
     } catch (err) {
+      autoProcessRef.current = false
       setError(err instanceof Error ? err.message : 'Er is iets misgegaan')
     } finally {
       setIsUploading(false)
@@ -126,6 +143,10 @@ export default function UploadForm() {
     setError(null)
     setResult(null)
     setIsUploading(true)
+
+    // Determine if auto-processing should happen after upload
+    const shouldAutoProcess = optCleanTranscript || optExtractActionItems || optExtractDecisions || optGenerateReport
+    autoProcessRef.current = shouldAutoProcess
 
     try {
       setUploadProgress('PDF verwerken...')
@@ -151,6 +172,7 @@ export default function UploadForm() {
       setPostProjectId(selectedProjectId)
       setUploadProgress(null)
     } catch (err) {
+      autoProcessRef.current = false
       setError(err instanceof Error ? err.message : 'Er is iets misgegaan')
     } finally {
       setIsUploading(false)
@@ -173,7 +195,7 @@ export default function UploadForm() {
     if (file) {
       handleUpload(file)
     }
-  }, [uploadType, title, selectedProjectId])
+  }, [uploadType, title, selectedProjectId, optCleanTranscript, optExtractActionItems, optExtractDecisions, optGenerateReport])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -236,6 +258,9 @@ export default function UploadForm() {
   const handleStartAiProcessing = async () => {
     if (!result) return
 
+    // If no options are selected, skip AI processing
+    if (!optCleanTranscript && !optExtractActionItems && !optExtractDecisions && !optGenerateReport) return
+
     setIsAiProcessing(true)
     setAiStatus('processing')
     setAiError(null)
@@ -247,8 +272,9 @@ export default function UploadForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transcriptId: result.id,
-          projectId: postProjectId || undefined,
+          projectId: postProjectId || selectedProjectId || undefined,
           options: {
+            cleanTranscript: optCleanTranscript,
             extractActionItems: optExtractActionItems,
             extractDecisions: optExtractDecisions,
             generateReport: optGenerateReport,
@@ -327,14 +353,18 @@ export default function UploadForm() {
     setAiError(null)
     setAiResults({})
     setIsAiProcessing(false)
-    setOptExtractActionItems(true)
-    setOptExtractDecisions(true)
+    setOptCleanTranscript(true)
+    setOptExtractActionItems(false)
+    setOptExtractDecisions(false)
     setOptGenerateReport(false)
+    autoProcessRef.current = false
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
       pollingRef.current = null
     }
   }
+
+  const projectSelected = selectedProjectId !== ''
 
   return (
     <div className="w-full">
@@ -400,6 +430,68 @@ export default function UploadForm() {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Processing Options - Pre-upload */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Verwerkingsopties
+            </label>
+            <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={optCleanTranscript}
+                  onChange={(e) => setOptCleanTranscript(e.target.checked)}
+                  disabled={isUploading}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="text-sm text-slate-700">Transcript opschonen</span>
+                <span className="text-xs text-slate-400">Aanbevolen</span>
+              </label>
+
+              <label className={`flex items-center gap-2 ${projectSelected ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+                <input
+                  type="checkbox"
+                  checked={optExtractActionItems}
+                  onChange={(e) => setOptExtractActionItems(e.target.checked)}
+                  disabled={isUploading || !projectSelected}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="text-sm text-slate-700">Actiepunten extraheren</span>
+                {!projectSelected && (
+                  <span className="text-xs text-slate-400">Selecteer een project voor deze optie</span>
+                )}
+              </label>
+
+              <label className={`flex items-center gap-2 ${projectSelected ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+                <input
+                  type="checkbox"
+                  checked={optExtractDecisions}
+                  onChange={(e) => setOptExtractDecisions(e.target.checked)}
+                  disabled={isUploading || !projectSelected}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="text-sm text-slate-700">Besluiten extraheren</span>
+                {!projectSelected && (
+                  <span className="text-xs text-slate-400">Selecteer een project voor deze optie</span>
+                )}
+              </label>
+
+              <label className={`flex items-center gap-2 ${projectSelected ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+                <input
+                  type="checkbox"
+                  checked={optGenerateReport}
+                  onChange={(e) => setOptGenerateReport(e.target.checked)}
+                  disabled={isUploading || !projectSelected}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="text-sm text-slate-700">Verslag genereren</span>
+                {!projectSelected && (
+                  <span className="text-xs text-slate-400">Selecteer een project voor deze optie</span>
+                )}
+              </label>
+            </div>
           </div>
         </div>
       )}
@@ -496,105 +588,55 @@ export default function UploadForm() {
             </select>
           </div>
 
-          {/* AI Processing Section */}
-          {postProjectId && (
+          {/* AI Processing Status - inline */}
+          {aiStatus === 'processing' && (
             <div className="card">
-              <h3 className="text-sm font-medium text-slate-900 mb-3">AI Verwerking</h3>
-
-              {/* Options checkboxes */}
-              <div className="space-y-2 mb-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={optExtractActionItems}
-                    onChange={(e) => setOptExtractActionItems(e.target.checked)}
-                    disabled={isAiProcessing}
-                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                  />
-                  <span className="text-sm text-slate-700">Actiepunten extraheren</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={optExtractDecisions}
-                    onChange={(e) => setOptExtractDecisions(e.target.checked)}
-                    disabled={isAiProcessing}
-                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                  />
-                  <span className="text-sm text-slate-700">Besluiten extraheren</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={optGenerateReport}
-                    onChange={(e) => setOptGenerateReport(e.target.checked)}
-                    disabled={isAiProcessing}
-                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                  />
-                  <span className="text-sm text-slate-700">Verslag genereren</span>
-                </label>
+              <div className="flex items-center gap-3 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                <div className="w-5 h-5 rounded-full border-2 border-sky-200 border-t-sky-500 animate-spin flex-shrink-0" />
+                <span className="text-sm text-sky-700">AI verwerking bezig... Dit kan even duren.</span>
               </div>
+            </div>
+          )}
 
-              {/* Start button */}
-              {!aiStatus && (
+          {aiStatus === 'completed' && (
+            <div className="card space-y-3">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-sm font-medium text-emerald-700">AI verwerking voltooid</span>
+                </div>
+                {aiResults.summary && (
+                  <p className="text-sm text-emerald-700 mt-1">{aiResults.summary}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {aiResults.actionItemCount !== undefined && aiResults.actionItemCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200">
+                    {aiResults.actionItemCount} actiepunt{aiResults.actionItemCount !== 1 ? 'en' : ''} geëxtraheerd
+                  </span>
+                )}
+                {aiResults.decisionCount !== undefined && aiResults.decisionCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-full border border-purple-200">
+                    {aiResults.decisionCount} besluit{aiResults.decisionCount !== 1 ? 'en' : ''} geëxtraheerd
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {aiStatus === 'error' && (
+            <div className="card">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{aiError || 'Er is een fout opgetreden'}</p>
                 <button
-                  onClick={handleStartAiProcessing}
-                  disabled={isAiProcessing}
-                  className="w-full py-2.5 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                  onClick={() => { setAiStatus(null); setAiError(null); handleStartAiProcessing() }}
+                  className="mt-2 text-sm text-red-700 underline hover:no-underline"
                 >
-                  Verwerk met AI
+                  Opnieuw proberen
                 </button>
-              )}
-
-              {/* Processing state */}
-              {aiStatus === 'processing' && (
-                <div className="flex items-center gap-3 p-3 bg-sky-50 border border-sky-200 rounded-lg">
-                  <div className="w-5 h-5 rounded-full border-2 border-sky-200 border-t-sky-500 animate-spin flex-shrink-0" />
-                  <span className="text-sm text-sky-700">AI verwerking bezig... Dit kan even duren.</span>
-                </div>
-              )}
-
-              {/* Completed state */}
-              {aiStatus === 'completed' && (
-                <div className="space-y-3">
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="text-sm font-medium text-emerald-700">AI verwerking voltooid</span>
-                    </div>
-                    {aiResults.summary && (
-                      <p className="text-sm text-emerald-700 mt-1">{aiResults.summary}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {aiResults.actionItemCount !== undefined && aiResults.actionItemCount > 0 && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200">
-                        {aiResults.actionItemCount} actiepunt{aiResults.actionItemCount !== 1 ? 'en' : ''} geëxtraheerd
-                      </span>
-                    )}
-                    {aiResults.decisionCount !== undefined && aiResults.decisionCount > 0 && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-full border border-purple-200">
-                        {aiResults.decisionCount} besluit{aiResults.decisionCount !== 1 ? 'en' : ''} geëxtraheerd
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Error state */}
-              {aiStatus === 'error' && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-600">{aiError || 'Er is een fout opgetreden'}</p>
-                  <button
-                    onClick={() => { setAiStatus(null); setAiError(null) }}
-                    className="mt-2 text-sm text-red-700 underline hover:no-underline"
-                  >
-                    Opnieuw proberen
-                  </button>
-                </div>
-              )}
+              </div>
             </div>
           )}
 
