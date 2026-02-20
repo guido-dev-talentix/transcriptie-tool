@@ -40,6 +40,7 @@ interface DashboardData {
       filename: string
       status: string
       duration: number | null
+      summary: string | null
       createdAt: string
     }>
     reports: Array<{

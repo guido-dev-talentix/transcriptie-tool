@@ -61,13 +61,14 @@ export async function GET(
       prisma.transcript.findMany({
         where: { projectId: id },
         orderBy: { createdAt: 'desc' },
-        take: 5,
+        take: 10,
         select: {
           id: true,
           title: true,
           filename: true,
           status: true,
           duration: true,
+          summary: true,
           createdAt: true,
         },
       }),
@@ -114,7 +115,7 @@ export async function GET(
     const recentActionItems = sortActionItems(actionItemsRaw).slice(0, 10)
 
     // Sort decisions: active first, then by date
-    const recentDecisions = sortDecisions(recentDecisionsRaw).slice(0, 5)
+    const recentDecisions = sortDecisions(recentDecisionsRaw).slice(0, 10)
 
     return NextResponse.json({
       project,
