@@ -5,32 +5,32 @@
 See: .planning/PROJECT.md (updated 2026-02-12)
 
 **Core value:** Na elke vergadering weet het hele team automatisch wat er is besproken, besloten en wie wat moet doen -- zonder dat iemand een verslag hoeft te schrijven.
-**Current focus:** Phase 1 - Projectervaring
+**Current focus:** Phase 1 - Projectervaring (Complete)
 
 ## Current Position
 
 Phase: 1 of 4 (Projectervaring)
-Plan: 1 of 2 in current phase
-Status: Executing phase 1
-Last activity: 2026-02-20 -- Completed 01-01-PLAN.md (Folder Organization)
+Plan: 2 of 2 in current phase (COMPLETE)
+Status: Phase 1 complete
+Last activity: 2026-02-20 -- Completed 01-02-PLAN.md (Dashboard & Upload Polish)
 
-Progress: [█░░░░░░░░░] 12%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 4min
-- Total execution time: 0.07 hours
+- Total plans completed: 2
+- Average duration: 3.5min
+- Total execution time: 0.12 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-projectervaring | 1 | 4min | 4min |
+| 01-projectervaring | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (4min)
+- Last 5 plans: 01-01 (4min), 01-02 (3min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -48,6 +48,10 @@ Recent decisions affecting current work:
 - [01-01]: Replaced parentId/ProjectHierarchy with folderId/Folder model for flat folder organization
 - [01-01]: Used @dnd-kit with PointerSensor distance:8 constraint for drag-and-drop
 - [01-01]: Established useContextMenu hook pattern for right-click menus
+- [01-02]: SVZ always shown as hero with placeholder when empty, border-l-4 accent
+- [01-02]: Stats grid removed, counts moved to section headers
+- [01-02]: Processing options moved pre-upload with auto-trigger after upload
+- [01-02]: Default changed: only "Transcript opschonen" ON, all others OFF
 
 ### Pending Todos
 
@@ -61,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 01-01-PLAN.md (Folder Organization)
+Stopped at: Completed 01-02-PLAN.md (Dashboard & Upload Polish) -- Phase 1 complete
 Resume file: None

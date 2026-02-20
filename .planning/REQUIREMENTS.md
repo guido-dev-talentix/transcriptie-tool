@@ -17,14 +17,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dashboard
 
-- [ ] **DASH-01**: Gebruiker ziet bij openen project direct de cumulatieve "Stand van Zaken"
-- [ ] **DASH-02**: Dashboard toont aantal en lijst van open actiepunten
-- [ ] **DASH-03**: Dashboard toont recente besluiten (laatste 5-10)
-- [ ] **DASH-04**: Dashboard toont overzicht van recente transcripties/vergaderingen
+- [x] **DASH-01**: Gebruiker ziet bij openen project direct de cumulatieve "Stand van Zaken"
+- [x] **DASH-02**: Dashboard toont aantal en lijst van open actiepunten
+- [x] **DASH-03**: Dashboard toont recente besluiten (laatste 5-10)
+- [x] **DASH-04**: Dashboard toont overzicht van recente transcripties/vergaderingen
 
 ### Verwerking
 
-- [ ] **VERW-01**: Upload flow toont duidelijke verwerkingsopties (transcript, besluiten, actiepunten, verslag) met verbeterde UX
+- [x] **VERW-01**: Upload flow toont duidelijke verwerkingsopties (transcript, besluiten, actiepunten, verslag) met verbeterde UX
 - [ ] **VERW-02**: Gebruiker kan actiepuntstatus wijzigen (open/in behandeling/afgerond)
 - [ ] **VERW-03**: Gebruiker kan actiepunt toewijzen aan een projectlid
 - [ ] **VERW-04**: Overzicht toont actiepunten gefilterd op status en toegewezen persoon
@@ -93,11 +93,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORG-03 | Phase 1 | Complete |
 | ORG-04 | Phase 2 | Pending |
 | ORG-05 | Phase 2 | Pending |
-| DASH-01 | Phase 1 | Pending |
-| DASH-02 | Phase 1 | Pending |
-| DASH-03 | Phase 1 | Pending |
-| DASH-04 | Phase 1 | Pending |
-| VERW-01 | Phase 1 | Pending |
+| DASH-01 | Phase 1 | Complete |
+| DASH-02 | Phase 1 | Complete |
+| DASH-03 | Phase 1 | Complete |
+| DASH-04 | Phase 1 | Complete |
+| VERW-01 | Phase 1 | Complete |
 | VERW-02 | Phase 2 | Pending |
 | VERW-03 | Phase 2 | Pending |
 | VERW-04 | Phase 2 | Pending |
