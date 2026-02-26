@@ -27,6 +27,26 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     })
   }
 
+  // Auto-create user in Prisma if they exist in Supabase but not in the DB
+  // This handles cases where the auth callback upsert failed or was bypassed
+  // (e.g. email/password login doesn't go through /auth/callback)
+  if (!dbUser && user.email) {
+    try {
+      const isSearchX = user.email.endsWith('@searchxrecruitment.com')
+      dbUser = await prisma.user.create({
+        data: {
+          id: user.id,
+          email: user.email,
+          role: 'USER',
+          approved: isSearchX,
+        },
+      })
+    } catch (e) {
+      console.error('Failed to auto-create user in DB:', e)
+      return null
+    }
+  }
+
   if (!dbUser) {
     return null
   }

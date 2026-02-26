@@ -21,6 +21,7 @@ export default function Sidebar() {
     const router = useRouter()
     const [isAdmin, setIsAdmin] = useState(false)
     const [userEmail, setUserEmail] = useState<string | null>(null)
+    const [loadError, setLoadError] = useState(false)
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,9 +38,12 @@ export default function Sidebar() {
                     if (data.role === 'ADMIN') {
                         setIsAdmin(true)
                     }
+                } else {
+                    setLoadError(true)
                 }
             } catch (err) {
                 console.error('Failed to fetch user:', err)
+                setLoadError(true)
             }
         }
         checkUser()
@@ -131,7 +135,7 @@ export default function Sidebar() {
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 truncate">
-                            {userEmail || 'Laden...'}
+                            {userEmail || (loadError ? 'Fout bij laden' : 'Laden...')}
                         </p>
                         <p className="text-xs text-slate-500 truncate">
                             {isAdmin ? 'Administrator' : 'Gebruiker'}
