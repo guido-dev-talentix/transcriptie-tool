@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const unlinked = searchParams.get('unlinked') === 'true'
 
-    // Build filter: admins see all, regular users only see transcripts from their projects
+    // Build filter: admins see all, regular users see own transcripts + project transcripts
     let whereFilter
     if (unlinked) {
       whereFilter = { projectId: null, status: 'completed' }
@@ -38,8 +38,12 @@ export async function GET(request: NextRequest) {
       whereFilter = undefined // admins see everything
     } else {
       whereFilter = {
-        projectId: { not: null },
-        project: { users: { some: { userId: user.id } } },
+        OR: [
+          // Transcripts from projects the user is a member of
+          { project: { users: { some: { userId: user.id } } } },
+          // User's own transcripts (including orphans without project)
+          { userId: user.id },
+        ],
       }
     }
 

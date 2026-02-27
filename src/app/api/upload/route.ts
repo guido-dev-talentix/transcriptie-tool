@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AssemblyAI } from 'assemblyai'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/db'
+import { createClient } from '@/lib/supabase/server'
 
 const client = new AssemblyAI({
   apiKey: process.env.ASSEMBLYAI_API_KEY!,
 })
-
-const prisma = new PrismaClient()
 
 const ALLOWED_TYPES = [
   'audio/mpeg',
@@ -26,6 +25,9 @@ export const maxDuration = 300 // 5 minutes for long transcriptions
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
     const formData = await request.formData()
     const file = formData.get('file') as File | null
 
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest) {
         srt,
         language: transcript.language_code,
         assemblyId: transcript.id,
+        userId: user?.id || null,
       },
     })
 

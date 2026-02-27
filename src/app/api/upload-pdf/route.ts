@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { createClient } from '@/lib/supabase/server'
 import { extractText } from 'unpdf'
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const title = formData.get('title') as string | null
@@ -41,6 +45,7 @@ export async function POST(request: NextRequest) {
         text: text.trim(),
         language: 'nl', // Assume Dutch
         projectId: projectId || null,
+        userId: user?.id || null,
       },
       include: {
         project: {

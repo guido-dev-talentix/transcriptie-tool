@@ -22,6 +22,7 @@ model Transcript {
   title       String?
   cleanedText String?
   projectId   String?
+  userId      String?
   summary     String?
   aiStatus    String?      // null = not started, "processing" = in progress, "completed" = done, "error" = failed
   aiError     String?
