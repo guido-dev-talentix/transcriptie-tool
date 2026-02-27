@@ -31,14 +31,20 @@ export async function GET(request: NextRequest) {
     const unlinked = searchParams.get('unlinked') === 'true'
 
     // Build filter: admins see all, regular users only see transcripts from their projects
-    const accessFilter = isAdmin
-      ? {}
-      : { project: { users: { some: { userId: user.id } } } }
+    let whereFilter
+    if (unlinked) {
+      whereFilter = { projectId: null, status: 'completed' }
+    } else if (isAdmin) {
+      whereFilter = undefined // admins see everything
+    } else {
+      whereFilter = {
+        projectId: { not: null },
+        project: { users: { some: { userId: user.id } } },
+      }
+    }
 
     const transcripts = await prisma.transcript.findMany({
-      where: unlinked
-        ? { projectId: null, status: 'completed' }
-        : { projectId: { not: null }, ...accessFilter },
+      where: whereFilter,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
