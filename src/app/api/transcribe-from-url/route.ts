@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AssemblyAI } from 'assemblyai'
+import { del } from '@vercel/blob'
 import { prisma } from '@/lib/db'
 import { createClient } from '@/lib/supabase/server'
 
@@ -57,6 +58,14 @@ export async function POST(request: NextRequest) {
         userId: user?.id || null,
       },
     })
+
+    // Delete audio blob — no longer needed after transcription
+    try {
+      await del(audioUrl)
+      console.log('Blob deleted:', audioUrl)
+    } catch (blobError) {
+      console.error('Failed to delete blob (non-critical):', blobError)
+    }
 
     return NextResponse.json({
       id: savedTranscript.id,
