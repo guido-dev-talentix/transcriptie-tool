@@ -8,172 +8,7 @@ interface ProcessOptions {
   generateReport?: boolean
 }
 
-// Background processing function - runs after response is sent
-async function processInBackground(
-  transcriptId: string,
-  projectId: string | null,
-  text: string,
-  projectName?: string,
-  options?: ProcessOptions
-) {
-  try {
-    // 1. Process with AI (always)
-    const result = await processTranscript(text, {
-      projectName: projectName,
-    })
-
-    // Update transcript with cleaned text and summary
-    const updateData: {
-      cleanedText: string
-      summary: string
-      aiStatus: string
-      projectId?: string
-    } = {
-      cleanedText: result.cleanedText,
-      summary: result.summary,
-      aiStatus: 'completed',
-    }
-
-    // Link to project if provided
-    if (projectId) {
-      updateData.projectId = projectId
-    }
-
-    await prisma.transcript.update({
-      where: { id: transcriptId },
-      data: updateData,
-    })
-
-    // 2. Update Stand van Zaken if transcript belongs to a project (always)
-    const effectiveProjectId = projectId
-    if (effectiveProjectId) {
-      try {
-        const project = await prisma.project.findUnique({
-          where: { id: effectiveProjectId },
-          select: { statusSummary: true, name: true },
-        })
-
-        if (project) {
-          const svzResult = await generateStatusUpdate(
-            project.statusSummary,
-            result.summary || result.cleanedText,
-            projectName || project.name
-          )
-
-          await prisma.project.update({
-            where: { id: effectiveProjectId },
-            data: {
-              statusSummary: svzResult.statusSummary,
-              statusUpdatedAt: new Date(),
-            },
-          })
-
-          console.log(`Stand van Zaken updated for project ${effectiveProjectId}`)
-        }
-      } catch (svzError) {
-        console.error('Error updating Stand van Zaken:', svzError)
-      }
-    }
-
-    // Use cleaned text for extractions
-    const textForExtraction = result.cleanedText || text
-
-    // 3. Extract action items if requested
-    if (options?.extractActionItems && effectiveProjectId) {
-      try {
-        const aiResult = await extractActionItems(textForExtraction, { projectName })
-        if (aiResult.actionItems && aiResult.actionItems.length > 0) {
-          await prisma.actionItem.createMany({
-            data: aiResult.actionItems.map(item => ({
-              title: item.title,
-              description: item.description || null,
-              priority: item.priority || 'medium',
-              assignee: item.assignee || null,
-              sourceType: 'ai',
-              projectId: effectiveProjectId,
-              transcriptId: transcriptId,
-            })),
-          })
-          console.log(`${aiResult.actionItems.length} action items extracted for transcript ${transcriptId}`)
-        }
-      } catch (aiError) {
-        console.error('Error extracting action items:', aiError)
-      }
-    }
-
-    // 4. Extract decisions if requested
-    if (options?.extractDecisions && effectiveProjectId) {
-      try {
-        const aiResult = await extractDecisions(textForExtraction, { projectName })
-        if (aiResult.decisions && aiResult.decisions.length > 0) {
-          await prisma.decision.createMany({
-            data: aiResult.decisions.map(item => ({
-              title: item.title,
-              description: item.description || null,
-              context: item.context || null,
-              madeBy: item.madeBy || null,
-              sourceType: 'ai',
-              projectId: effectiveProjectId,
-              transcriptId: transcriptId,
-            })),
-          })
-          console.log(`${aiResult.decisions.length} decisions extracted for transcript ${transcriptId}`)
-        }
-      } catch (aiError) {
-        console.error('Error extracting decisions:', aiError)
-      }
-    }
-
-    // 5. Generate report if requested
-    if (options?.generateReport && effectiveProjectId) {
-      try {
-        const transcript = await prisma.transcript.findUnique({
-          where: { id: transcriptId },
-          select: { title: true, text: true, cleanedText: true, summary: true },
-        })
-        const actionItems = await prisma.actionItem.findMany({
-          where: { transcriptId, projectId: effectiveProjectId },
-          select: { title: true, description: true, status: true, priority: true, assignee: true },
-        })
-
-        if (transcript) {
-          const reportResult = await generateReport(
-            { text: transcript.text || text, cleanedText: transcript.cleanedText, summary: transcript.summary, title: transcript.title },
-            actionItems,
-            'meeting'
-          )
-
-          await prisma.report.create({
-            data: {
-              title: reportResult.title,
-              content: reportResult.content,
-              type: 'meeting',
-              projectId: effectiveProjectId,
-              transcriptId: transcriptId,
-            },
-          })
-          console.log(`Report generated for transcript ${transcriptId}`)
-        }
-      } catch (reportError) {
-        console.error('Error generating report:', reportError)
-      }
-    }
-
-    console.log(`AI processing completed for transcript ${transcriptId}`)
-  } catch (error) {
-    console.error('Background AI processing error:', error)
-    // Update transcript with error status
-    await prisma.transcript.update({
-      where: { id: transcriptId },
-      data: {
-        aiStatus: 'error',
-        aiError: error instanceof Error ? error.message : 'Onbekende fout',
-      },
-    })
-  }
-}
-
-// POST /api/ai/process-transcript - Start AI processing in background
+// POST /api/ai/process-transcript - Process transcript via streaming SSE
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -189,9 +24,7 @@ export async function POST(request: NextRequest) {
     // Get transcript
     const transcript = await prisma.transcript.findUnique({
       where: { id: transcriptId },
-      include: {
-        project: true,
-      },
+      include: { project: true },
     })
 
     if (!transcript) {
@@ -208,15 +41,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if already processing
+    // Check if already processing (allow retry if stuck for >10 minutes)
     if (transcript.aiStatus === 'processing') {
-      return NextResponse.json(
-        { error: 'AI verwerking is al bezig' },
-        { status: 409 }
-      )
+      const staleMinutes = 10
+      const msSinceUpdate = Date.now() - new Date(transcript.updatedAt).getTime()
+      if (msSinceUpdate < staleMinutes * 60 * 1000) {
+        return NextResponse.json(
+          { error: 'AI verwerking is al bezig' },
+          { status: 409 }
+        )
+      }
+      console.log(`AI processing stuck for ${Math.round(msSinceUpdate / 60000)}m, allowing retry for transcript ${transcript.id}`)
     }
 
-    // Resolve project name - if a new projectId is provided, look it up
+    // Resolve project name
     let projectName = transcript.project?.name
     const effectiveProjectId = projectId || transcript.projectId
     if (projectId && !transcript.project) {
@@ -237,19 +75,209 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Start background processing (fire and forget)
-    processInBackground(
-      transcriptId,
-      effectiveProjectId,
-      transcript.text,
-      projectName,
-      options as ProcessOptions | undefined
-    )
+    const text = transcript.text
+    const opts = options as ProcessOptions | undefined
+    const encoder = new TextEncoder()
 
-    // Return immediately
-    return NextResponse.json({
-      message: 'AI verwerking gestart',
-      status: 'processing',
+    // Return streaming SSE response — keeps Vercel function alive on Hobby plan
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (data: Record<string, unknown>) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+          } catch {
+            // Stream already closed (client disconnected)
+          }
+        }
+
+        // Heartbeat keeps connection alive during long AI calls
+        const heartbeat = setInterval(() => {
+          send({ type: 'heartbeat' })
+        }, 5000)
+
+        try {
+          // Step 1: Process transcript (always)
+          send({ type: 'progress', step: 'clean', status: 'processing' })
+          const result = await processTranscript(text, { projectName })
+
+          const updateData: {
+            cleanedText: string
+            summary: string
+            aiStatus: string
+            projectId?: string
+          } = {
+            cleanedText: result.cleanedText,
+            summary: result.summary,
+            aiStatus: 'completed',
+          }
+          if (effectiveProjectId) {
+            updateData.projectId = effectiveProjectId
+          }
+
+          await prisma.transcript.update({
+            where: { id: transcriptId },
+            data: updateData,
+          })
+          send({ type: 'progress', step: 'clean', status: 'completed' })
+
+          // Step 2: Update Stand van Zaken if project linked (always)
+          if (effectiveProjectId) {
+            try {
+              send({ type: 'progress', step: 'status', status: 'processing' })
+              const project = await prisma.project.findUnique({
+                where: { id: effectiveProjectId },
+                select: { statusSummary: true, name: true },
+              })
+
+              if (project) {
+                const svzResult = await generateStatusUpdate(
+                  project.statusSummary,
+                  result.summary || result.cleanedText,
+                  projectName || project.name
+                )
+                await prisma.project.update({
+                  where: { id: effectiveProjectId },
+                  data: {
+                    statusSummary: svzResult.statusSummary,
+                    statusUpdatedAt: new Date(),
+                  },
+                })
+                console.log(`Stand van Zaken updated for project ${effectiveProjectId}`)
+              }
+              send({ type: 'progress', step: 'status', status: 'completed' })
+            } catch (svzError) {
+              console.error('Error updating Stand van Zaken:', svzError)
+              send({ type: 'progress', step: 'status', status: 'error' })
+            }
+          }
+
+          // Use cleaned text for extractions
+          const textForExtraction = result.cleanedText || text
+          let actionItemCount = 0
+          let decisionCount = 0
+
+          // Step 3: Extract action items if requested
+          if (opts?.extractActionItems && effectiveProjectId) {
+            try {
+              send({ type: 'progress', step: 'actions', status: 'processing' })
+              const aiResult = await extractActionItems(textForExtraction, { projectName })
+              if (aiResult.actionItems && aiResult.actionItems.length > 0) {
+                await prisma.actionItem.createMany({
+                  data: aiResult.actionItems.map(item => ({
+                    title: item.title,
+                    description: item.description || null,
+                    priority: item.priority || 'medium',
+                    assignee: item.assignee || null,
+                    sourceType: 'ai',
+                    projectId: effectiveProjectId,
+                    transcriptId: transcriptId,
+                  })),
+                })
+                actionItemCount = aiResult.actionItems.length
+                console.log(`${actionItemCount} action items extracted for transcript ${transcriptId}`)
+              }
+              send({ type: 'progress', step: 'actions', status: 'completed', count: actionItemCount })
+            } catch (aiError) {
+              console.error('Error extracting action items:', aiError)
+              send({ type: 'progress', step: 'actions', status: 'error' })
+            }
+          }
+
+          // Step 4: Extract decisions if requested
+          if (opts?.extractDecisions && effectiveProjectId) {
+            try {
+              send({ type: 'progress', step: 'decisions', status: 'processing' })
+              const aiResult = await extractDecisions(textForExtraction, { projectName })
+              if (aiResult.decisions && aiResult.decisions.length > 0) {
+                await prisma.decision.createMany({
+                  data: aiResult.decisions.map(item => ({
+                    title: item.title,
+                    description: item.description || null,
+                    context: item.context || null,
+                    madeBy: item.madeBy || null,
+                    sourceType: 'ai',
+                    projectId: effectiveProjectId,
+                    transcriptId: transcriptId,
+                  })),
+                })
+                decisionCount = aiResult.decisions.length
+                console.log(`${decisionCount} decisions extracted for transcript ${transcriptId}`)
+              }
+              send({ type: 'progress', step: 'decisions', status: 'completed', count: decisionCount })
+            } catch (aiError) {
+              console.error('Error extracting decisions:', aiError)
+              send({ type: 'progress', step: 'decisions', status: 'error' })
+            }
+          }
+
+          // Step 5: Generate report if requested
+          if (opts?.generateReport && effectiveProjectId) {
+            try {
+              send({ type: 'progress', step: 'report', status: 'processing' })
+              const transcriptData = await prisma.transcript.findUnique({
+                where: { id: transcriptId },
+                select: { title: true, text: true, cleanedText: true, summary: true },
+              })
+              const actionItems = await prisma.actionItem.findMany({
+                where: { transcriptId, projectId: effectiveProjectId },
+                select: { title: true, description: true, status: true, priority: true, assignee: true },
+              })
+
+              if (transcriptData) {
+                const reportResult = await generateReport(
+                  { text: transcriptData.text || text, cleanedText: transcriptData.cleanedText, summary: transcriptData.summary, title: transcriptData.title },
+                  actionItems,
+                  'meeting'
+                )
+                await prisma.report.create({
+                  data: {
+                    title: reportResult.title,
+                    content: reportResult.content,
+                    type: 'meeting',
+                    projectId: effectiveProjectId,
+                    transcriptId: transcriptId,
+                  },
+                })
+                console.log(`Report generated for transcript ${transcriptId}`)
+              }
+              send({ type: 'progress', step: 'report', status: 'completed' })
+            } catch (reportError) {
+              console.error('Error generating report:', reportError)
+              send({ type: 'progress', step: 'report', status: 'error' })
+            }
+          }
+
+          console.log(`AI processing completed for transcript ${transcriptId}`)
+          send({ type: 'complete', summary: result.summary, actionItemCount, decisionCount })
+        } catch (error) {
+          console.error('Background AI processing error:', error)
+          const message = error instanceof Error ? error.message : 'Onbekende fout'
+          send({ type: 'error', message })
+
+          try {
+            await prisma.transcript.update({
+              where: { id: transcriptId },
+              data: {
+                aiStatus: 'error',
+                aiError: message,
+              },
+            })
+          } catch (dbError) {
+            console.error('Failed to update transcript error status:', dbError)
+          }
+        } finally {
+          clearInterval(heartbeat)
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
     })
   } catch (error) {
     console.error('Error starting AI processing:', error)

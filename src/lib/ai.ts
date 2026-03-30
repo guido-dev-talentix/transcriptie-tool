@@ -1,8 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// OpenRouter API configuration
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+const AI_MODEL = 'anthropic/claude-sonnet-4.6'
 
 function parseAIJsonResponse<T>(responseText: string): T {
   let jsonString = responseText
@@ -38,10 +37,10 @@ function parseAIJsonResponse<T>(responseText: string): T {
   }
 }
 
-// Pricing per million tokens (Claude Sonnet)
+// Pricing per million tokens (Claude Sonnet via OpenRouter)
 const PRICING = { input: 3.0, output: 15.0 }
 
-// Helper: streaming call that returns the final text + stop_reason
+// Helper: call OpenRouter API and return the final text + stop_reason
 async function streamMessage(params: {
   system: string
   userPrompt: string
@@ -50,24 +49,41 @@ async function streamMessage(params: {
 }): Promise<{ text: string; stopReason: string | null }> {
   const startTime = Date.now()
 
-  const stream = anthropic.messages.stream({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: params.max_tokens,
-    messages: [
-      {
-        role: 'user',
-        content: params.userPrompt,
-      },
-    ],
-    system: params.system,
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is niet geconfigureerd')
+  }
+
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+      'X-Title': 'Transcriptie Tool',
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      max_tokens: params.max_tokens,
+      messages: [
+        { role: 'system', content: params.system },
+        { role: 'user', content: params.userPrompt },
+      ],
+    }),
   })
 
-  const message = await stream.finalMessage()
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error(`OpenRouter API error: ${response.status}`, errorText)
+    throw new Error(`AI API fout: ${response.status}`)
+  }
+
+  const data = await response.json()
+  const text = data.choices?.[0]?.message?.content || ''
+  const finishReason = data.choices?.[0]?.finish_reason || null
 
   const durationSec = ((Date.now() - startTime) / 1000).toFixed(1)
-  const inputTokens = message.usage.input_tokens
-  const outputTokens = message.usage.output_tokens
+  const inputTokens = data.usage?.prompt_tokens || 0
+  const outputTokens = data.usage?.completion_tokens || 0
   const costInput = (inputTokens / 1_000_000) * PRICING.input
   const costOutput = (outputTokens / 1_000_000) * PRICING.output
   const costTotal = costInput + costOutput
@@ -79,7 +95,11 @@ async function streamMessage(params: {
     `totaal: $${costTotal.toFixed(4)}`
   )
 
-  return { text, stopReason: message.stop_reason }
+  // Map OpenAI finish_reason to Anthropic stop_reason format
+  // "length" in OpenAI = "max_tokens" in Anthropic
+  const stopReason = finishReason === 'length' ? 'max_tokens' : finishReason
+
+  return { text, stopReason }
 }
 
 export interface ProcessedTranscript {

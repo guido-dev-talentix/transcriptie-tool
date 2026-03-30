@@ -38,6 +38,9 @@ export default function UploadForm() {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
 
+  // Staged file (selected but not yet uploaded)
+  const [stagedFile, setStagedFile] = useState<File | null>(null)
+
   // Pre-upload processing options
   const [optCleanTranscript, setOptCleanTranscript] = useState(true)
   const [optExtractActionItems, setOptExtractActionItems] = useState(false)
@@ -51,6 +54,8 @@ export default function UploadForm() {
   const [aiStatus, setAiStatus] = useState<'processing' | 'completed' | 'error' | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiResults, setAiResults] = useState<AiResults>({})
+  const [aiProgress, setAiProgress] = useState<string | null>(null)
+  const [stepErrors, setStepErrors] = useState<string[]>([])
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const autoProcessRef = useRef(false)
 
@@ -193,9 +198,10 @@ export default function UploadForm() {
 
     const file = e.dataTransfer.files[0]
     if (file) {
-      handleUpload(file)
+      setStagedFile(file)
+      setError(null)
     }
-  }, [uploadType, title, selectedProjectId, optCleanTranscript, optExtractActionItems, optExtractDecisions, optGenerateReport])
+  }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -210,8 +216,20 @@ export default function UploadForm() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      handleUpload(file)
+      setStagedFile(file)
+      setError(null)
     }
+  }
+
+  const handleConfirmUpload = () => {
+    if (stagedFile) {
+      handleUpload(stagedFile)
+      setStagedFile(null)
+    }
+  }
+
+  const handleRemoveStagedFile = () => {
+    setStagedFile(null)
   }
 
   const handleCopyText = async () => {
@@ -255,6 +273,14 @@ export default function UploadForm() {
     }
   }
 
+  const STEP_LABELS: Record<string, string> = {
+    clean: 'Transcript opschonen',
+    status: 'Stand van Zaken bijwerken',
+    actions: 'Actiepunten extraheren',
+    decisions: 'Besluiten extraheren',
+    report: 'Verslag genereren',
+  }
+
   const handleStartAiProcessing = async () => {
     if (!result) return
 
@@ -265,6 +291,8 @@ export default function UploadForm() {
     setAiStatus('processing')
     setAiError(null)
     setAiResults({})
+    setAiProgress(null)
+    setStepErrors([])
 
     try {
       const response = await fetch('/api/ai/process-transcript', {
@@ -287,64 +315,69 @@ export default function UploadForm() {
         throw new Error(data.error || 'AI verwerking mislukt')
       }
 
-      // Start polling
-      pollingRef.current = setInterval(async () => {
-        try {
-          const pollRes = await fetch(`/api/transcripts/${result.id}`)
-          if (pollRes.ok) {
-            const transcript = await pollRes.json()
-            if (transcript.aiStatus === 'completed') {
-              if (pollingRef.current) clearInterval(pollingRef.current)
-              pollingRef.current = null
+      // Read SSE stream for real-time progress
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finalStatus: 'completed' | 'error' | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'progress') {
+              if (data.status === 'processing') {
+                setAiProgress(data.step)
+              } else if (data.status === 'error') {
+                setStepErrors(prev => [...prev, STEP_LABELS[data.step] || data.step])
+              }
+            } else if (data.type === 'complete') {
+              finalStatus = 'completed'
               setAiStatus('completed')
               setIsAiProcessing(false)
-
-              const results: AiResults = {
-                summary: transcript.summary,
-              }
-
-              // Fetch counts
-              if (optExtractActionItems) {
-                try {
-                  const aiRes = await fetch(`/api/action-items?transcriptId=${result.id}`)
-                  if (aiRes.ok) {
-                    const items = await aiRes.json()
-                    results.actionItemCount = items.length
-                  }
-                } catch { /* ignore */ }
-              }
-              if (optExtractDecisions) {
-                try {
-                  const decRes = await fetch(`/api/decisions?transcriptId=${result.id}`)
-                  if (decRes.ok) {
-                    const items = await decRes.json()
-                    results.decisionCount = items.length
-                  }
-                } catch { /* ignore */ }
-              }
-
-              setAiResults(results)
-            } else if (transcript.aiStatus === 'error') {
-              if (pollingRef.current) clearInterval(pollingRef.current)
-              pollingRef.current = null
+              setAiProgress(null)
+              setAiResults({
+                summary: data.summary,
+                actionItemCount: data.actionItemCount,
+                decisionCount: data.decisionCount,
+              })
+            } else if (data.type === 'error') {
+              finalStatus = 'error'
               setAiStatus('error')
-              setAiError(transcript.aiError || 'Onbekende fout')
+              setAiError(data.message)
               setIsAiProcessing(false)
+              setAiProgress(null)
             }
-          }
-        } catch {
-          // polling error, continue
+          } catch { /* ignore parse errors */ }
         }
-      }, 5000)
+      }
+
+      // Stream ended without complete/error event
+      if (!finalStatus) {
+        setAiStatus('error')
+        setAiError('Verbinding verbroken tijdens verwerking. Herlaad de pagina om de status te bekijken.')
+        setIsAiProcessing(false)
+        setAiProgress(null)
+      }
     } catch (err) {
       setAiStatus('error')
       setAiError(err instanceof Error ? err.message : 'AI verwerking mislukt')
       setIsAiProcessing(false)
+      setAiProgress(null)
     }
   }
 
   const handleNewTranscript = () => {
     setResult(null)
+    setStagedFile(null)
     setTitle('')
     setSelectedProjectId('')
     setEditableTitle('')
@@ -353,6 +386,8 @@ export default function UploadForm() {
     setAiError(null)
     setAiResults({})
     setIsAiProcessing(false)
+    setAiProgress(null)
+    setStepErrors([])
     setOptCleanTranscript(true)
     setOptExtractActionItems(false)
     setOptExtractDecisions(false)
@@ -496,37 +531,62 @@ export default function UploadForm() {
         </div>
       )}
 
-      {/* Drop Zone */}
+      {/* Drop Zone / Staged File / Uploading */}
       {!result && (
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          className={`
-            relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
-            ${isDragging
-              ? 'border-sky-400 bg-sky-50'
-              : 'border-slate-300 hover:border-slate-400 bg-white'
-            }
-            ${isUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}
-          `}
-        >
-          <input
-            type="file"
-            accept={uploadType === 'pdf' ? '.pdf,application/pdf' : '.mp3,.wav,.m4a,.mp4,audio/*,video/mp4'}
-            onChange={handleFileSelect}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            disabled={isUploading}
-          />
-
-          <div className="space-y-3">
-            {isUploading ? (
-              <>
+        <>
+          {isUploading ? (
+            <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-white opacity-60">
+              <div className="space-y-3">
                 <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin mx-auto" />
                 <p className="text-sm text-slate-600">{uploadProgress}</p>
-              </>
-            ) : (
-              <>
+              </div>
+            </div>
+          ) : stagedFile ? (
+            <div className="border-2 border-sky-300 bg-sky-50 rounded-lg p-6 text-center space-y-4">
+              <div className="flex items-center justify-center gap-2">
+                <svg className="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-sm font-medium text-slate-700">{stagedFile.name}</span>
+                <span className="text-xs text-slate-400">
+                  ({(stagedFile.size / (1024 * 1024)).toFixed(1)} MB)
+                </span>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={handleRemoveStagedFile}
+                  className="btn-secondary text-sm"
+                >
+                  Annuleren
+                </button>
+                <button
+                  onClick={handleConfirmUpload}
+                  className="btn-primary text-sm"
+                >
+                  Start transcriptie
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              className={`
+                relative border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
+                ${isDragging
+                  ? 'border-sky-400 bg-sky-50'
+                  : 'border-slate-300 hover:border-slate-400 bg-white'
+                }
+              `}
+            >
+              <input
+                type="file"
+                accept={uploadType === 'pdf' ? '.pdf,application/pdf' : '.mp3,.wav,.m4a,.mp4,audio/*,video/mp4'}
+                onChange={handleFileSelect}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <div className="space-y-3">
                 <svg className="w-8 h-8 text-slate-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
@@ -536,10 +596,10 @@ export default function UploadForm() {
                     <span className="text-sky-600 font-medium">klik om te selecteren</span>
                   </p>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Error Message */}
@@ -593,7 +653,9 @@ export default function UploadForm() {
             <div className="card">
               <div className="flex items-center gap-3 p-3 bg-sky-50 border border-sky-200 rounded-lg">
                 <div className="w-5 h-5 rounded-full border-2 border-sky-200 border-t-sky-500 animate-spin flex-shrink-0" />
-                <span className="text-sm text-sky-700">AI verwerking bezig... Dit kan even duren.</span>
+                <span className="text-sm text-sky-700">
+                  {aiProgress ? `${STEP_LABELS[aiProgress] || 'Verwerken'}...` : 'AI verwerking starten...'}
+                </span>
               </div>
             </div>
           )}
@@ -609,6 +671,11 @@ export default function UploadForm() {
                 </div>
                 {aiResults.summary && (
                   <p className="text-sm text-emerald-700 mt-1">{aiResults.summary}</p>
+                )}
+                {stepErrors.length > 0 && (
+                  <p className="text-sm text-amber-600 mt-2">
+                    Waarschuwing: {stepErrors.join(', ')} mislukt
+                  </p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">

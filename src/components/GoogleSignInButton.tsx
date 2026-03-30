@@ -16,7 +16,7 @@ export default function GoogleSignInButton({ label = 'Inloggen met Google' }: Go
         setError(null)
 
         const supabase = createClient()
-        const redirectTo = `${process.env.NEXT_PUBLIC_BASE_URL || window.location.origin}/auth/callback`
+        const redirectTo = `${window.location.origin}/auth/callback`
 
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',

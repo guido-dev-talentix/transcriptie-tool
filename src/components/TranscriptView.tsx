@@ -52,6 +52,8 @@ export default function TranscriptView({ id }: { id: string }) {
   const [optExtractDecisions, setOptExtractDecisions] = useState(true)
   const [optGenerateReport, setOptGenerateReport] = useState(false)
   const [aiResultCounts, setAiResultCounts] = useState<{ actionItems?: number; decisions?: number } | null>(null)
+  const [aiProgress, setAiProgress] = useState<string | null>(null)
+  const [stepErrors, setStepErrors] = useState<string[]>([])
 
   const fetchTranscript = async () => {
     try {
@@ -95,13 +97,23 @@ export default function TranscriptView({ id }: { id: string }) {
     return () => clearInterval(interval)
   }, [id, transcript?.status])
 
-  // Poll for AI processing status
+  // Poll for AI processing status (stop after 10 minutes - likely stuck)
+  const [aiProcessingStale, setAiProcessingStale] = useState(false)
   useEffect(() => {
     if (transcript?.aiStatus !== 'processing') {
+      setAiProcessingStale(false)
       return
     }
 
+    const startTime = Date.now()
+    const staleTimeout = 10 * 60 * 1000 // 10 minutes
+
     const interval = setInterval(async () => {
+      if (Date.now() - startTime > staleTimeout) {
+        setAiProcessingStale(true)
+        clearInterval(interval)
+        return
+      }
       await fetchTranscript()
     }, 5000)
 
@@ -179,6 +191,14 @@ export default function TranscriptView({ id }: { id: string }) {
     }
   }
 
+  const STEP_LABELS: Record<string, string> = {
+    clean: 'Transcript opschonen',
+    status: 'Stand van Zaken bijwerken',
+    actions: 'Actiepunten extraheren',
+    decisions: 'Besluiten extraheren',
+    report: 'Verslag genereren',
+  }
+
   const handleProcessWithAI = async () => {
     if (!transcript) return
     if (!selectedProjectId) {
@@ -187,6 +207,17 @@ export default function TranscriptView({ id }: { id: string }) {
     }
 
     setAiResultCounts(null)
+    setAiProcessingStale(false)
+    setAiProgress(null)
+    setStepErrors([])
+
+    // Update local state to show processing
+    setTranscript({
+      ...transcript,
+      aiStatus: 'processing',
+      aiError: null,
+      projectId: selectedProjectId,
+    })
 
     try {
       const response = await fetch('/api/ai/process-transcript', {
@@ -208,15 +239,68 @@ export default function TranscriptView({ id }: { id: string }) {
         throw new Error(data.error || 'AI verwerking mislukt')
       }
 
-      // Update local state to show processing
-      setTranscript({
-        ...transcript,
-        aiStatus: 'processing',
-        aiError: null,
-        projectId: selectedProjectId,
-      })
+      // Read SSE stream for real-time progress
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finalStatus: 'completed' | 'error' | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'progress') {
+              if (data.status === 'processing') {
+                setAiProgress(data.step)
+              } else if (data.status === 'error') {
+                setStepErrors(prev => [...prev, STEP_LABELS[data.step] || data.step])
+              }
+            } else if (data.type === 'complete') {
+              finalStatus = 'completed'
+              setAiProgress(null)
+              setAiResultCounts({
+                actionItems: data.actionItemCount || 0,
+                decisions: data.decisionCount || 0,
+              })
+              // Refresh transcript to get updated data
+              await fetchTranscript()
+            } else if (data.type === 'error') {
+              finalStatus = 'error'
+              setAiProgress(null)
+              setTranscript(prev => prev ? {
+                ...prev,
+                aiStatus: 'error',
+                aiError: data.message,
+              } : null)
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+
+      // Stream ended without complete/error event
+      if (!finalStatus) {
+        setAiProgress(null)
+        setTranscript(prev => prev ? {
+          ...prev,
+          aiStatus: 'error',
+          aiError: 'Verbinding verbroken tijdens verwerking. Herlaad de pagina om de status te bekijken.',
+        } : null)
+      }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'AI verwerking mislukt')
+      setAiProgress(null)
+      setTranscript(prev => prev ? {
+        ...prev,
+        aiStatus: 'error',
+        aiError: err instanceof Error ? err.message : 'AI verwerking mislukt',
+      } : null)
     }
   }
 
@@ -409,16 +493,31 @@ export default function TranscriptView({ id }: { id: string }) {
             {transcript.aiStatus === 'processing' && (
               <div className="mb-5 bg-white rounded-xl p-5 border border-brand-light-blue/30">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full border-4 border-slate-200 border-t-brand-light-blue animate-spin flex-shrink-0"></div>
+                  {!aiProcessingStale && (
+                    <div className="w-10 h-10 rounded-full border-4 border-slate-200 border-t-brand-light-blue animate-spin flex-shrink-0"></div>
+                  )}
                   <div className="flex-1">
-                    <p className="font-display font-semibold text-primary">AI verwerking bezig...</p>
-                    <p className="text-sm text-slate font-body mt-1">
-                      De transcriptie wordt geanalyseerd. Je kunt ondertussen doorgaan met andere taken.
-                    </p>
-                    {/* Progress bar animation */}
-                    <div className="mt-3 h-2 bg-slate-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-brand-light-blue rounded-full animate-pulse" style={{ width: '60%' }}></div>
-                    </div>
+                    {aiProcessingStale ? (
+                      <>
+                        <p className="font-display font-semibold text-amber-700">AI verwerking lijkt vastgelopen</p>
+                        <p className="text-sm text-slate font-body mt-1">
+                          De verwerking duurt langer dan verwacht. Je kunt het opnieuw proberen.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-display font-semibold text-primary">
+                          {aiProgress ? `${STEP_LABELS[aiProgress] || 'Verwerken'}...` : 'AI verwerking bezig...'}
+                        </p>
+                        <p className="text-sm text-slate font-body mt-1">
+                          De transcriptie wordt geanalyseerd. Je kunt ondertussen doorgaan met andere taken.
+                        </p>
+                        {/* Progress bar animation */}
+                        <div className="mt-3 h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-brand-light-blue rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -435,6 +534,23 @@ export default function TranscriptView({ id }: { id: string }) {
                     <p className="font-display font-semibold text-cta-red">AI verwerking mislukt</p>
                     <p className="text-sm text-cta-red/80 font-body mt-1">
                       {transcript.aiError || 'Er is een onbekende fout opgetreden'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step Errors (warnings for non-fatal step failures) */}
+            {transcript.aiStatus === 'completed' && stepErrors.length > 0 && (
+              <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <svg className="w-6 h-6 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <p className="font-display font-semibold text-amber-700">Voltooid met waarschuwingen</p>
+                    <p className="text-sm text-amber-600 font-body mt-1">
+                      {stepErrors.join(', ')} mislukt
                     </p>
                   </div>
                 </div>
@@ -551,14 +667,16 @@ export default function TranscriptView({ id }: { id: string }) {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleProcessWithAI}
-                disabled={transcript.aiStatus === 'processing' || !selectedProjectId}
+                disabled={(transcript.aiStatus === 'processing' && !aiProcessingStale) || !selectedProjectId}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
               >
-                {transcript.aiStatus === 'processing' ? (
+                {transcript.aiStatus === 'processing' && !aiProcessingStale ? (
                   <>
                     <div className="w-4 h-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin mr-2"></div>
                     Verwerken...
                   </>
+                ) : transcript.aiStatus === 'processing' && aiProcessingStale ? (
+                  'Opnieuw proberen'
                 ) : transcript.aiStatus === 'completed' ? (
                   'Opnieuw verwerken'
                 ) : (

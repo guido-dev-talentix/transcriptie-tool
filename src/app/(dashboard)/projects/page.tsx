@@ -63,7 +63,11 @@ export default function ProjectsPage() {
   const fetchData = async () => {
     try {
       const response = await fetch('/api/projects')
-      if (!response.ok) throw new Error('Failed to fetch')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('API error:', response.status, errorData)
+        throw new Error(errorData.error || 'Failed to fetch')
+      }
       const data = await response.json()
       setFolders(data.folders || [])
       setProjects(data.projects || [])
