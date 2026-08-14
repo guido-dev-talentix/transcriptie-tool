@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { requireUser } from '@/lib/auth'
 
 const prisma = new PrismaClient()
 
@@ -8,6 +9,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const { id } = await params
 
     await prisma.savedDestination.delete({

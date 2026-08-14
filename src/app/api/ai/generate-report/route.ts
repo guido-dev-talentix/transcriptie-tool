@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateReport } from '@/lib/ai'
-import { getTranscriptViewer, canViewTranscript } from '@/lib/auth'
+import { getTranscriptViewer, canViewTranscript, requireUser } from '@/lib/auth'
 
 // POST /api/ai/generate-report - Generate report from transcript
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const body = await request.json()
     const { transcriptId, projectId, type = 'meeting' } = body
 

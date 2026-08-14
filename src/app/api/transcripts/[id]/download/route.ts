@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getTranscriptViewer, canViewTranscript } from '@/lib/auth'
+import { getTranscriptViewer, canViewTranscript, requireUser } from '@/lib/auth'
 
 function generateObsidianMarkdown(transcript: {
   title: string | null
@@ -136,6 +136,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const { searchParams } = new URL(request.url)
     const format = searchParams.get('format') || 'txt'
     const { id } = await params

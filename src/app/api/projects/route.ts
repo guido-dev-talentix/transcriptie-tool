@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 
 // GET /api/projects - List folders and root projects in structured format
 // When ?status=active is passed, returns a flat array for backward compatibility
 export async function GET(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -101,6 +105,9 @@ export async function GET(request: NextRequest) {
 // POST /api/projects - Create new project
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getTranscriptionStatus, getSubtitles } from '@/lib/assemblyai'
-import { getTranscriptViewer, canViewTranscript } from '@/lib/auth'
+import { getTranscriptViewer, canViewTranscript, requireUser } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const { id } = await params
     const transcript = await prisma.transcript.findUnique({
       where: { id },
@@ -93,6 +96,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const body = await request.json()
     const { title, projectId, isPrivate } = body
     const { id } = await params
@@ -173,6 +179,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const { id } = await params
 
     const existing = await prisma.transcript.findUnique({

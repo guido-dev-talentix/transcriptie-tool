@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { requireUser } from '@/lib/auth'
 
 const prisma = new PrismaClient()
 
 export async function GET() {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const destinations = await prisma.savedDestination.findMany({
       orderBy: { createdAt: 'desc' },
     })
@@ -20,6 +24,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const { label, type, address } = await request.json()
 
     if (!label || !type || !address) {

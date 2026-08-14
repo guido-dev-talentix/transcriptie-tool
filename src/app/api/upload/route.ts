@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AssemblyAI } from 'assemblyai'
 import { prisma } from '@/lib/db'
 import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 
 const client = new AssemblyAI({
   apiKey: process.env.ASSEMBLYAI_API_KEY!,
@@ -25,6 +26,9 @@ export const maxDuration = 300 // 5 minutes for long transcriptions
 
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 

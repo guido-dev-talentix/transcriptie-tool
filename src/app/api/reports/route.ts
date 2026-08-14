@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { requireUser } from '@/lib/auth'
 
 // GET /api/reports - List reports
 export async function GET(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const searchParams = request.nextUrl.searchParams
     const projectId = searchParams.get('projectId')
     const type = searchParams.get('type')
@@ -41,6 +45,9 @@ export async function GET(request: NextRequest) {
 // POST /api/reports - Create new report manually
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const body = await request.json()
     const { title, content, type = 'meeting', projectId, transcriptId } = body
 

@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { createClient } from '@/lib/supabase/server'
 import { extractText } from 'unpdf'
+import { requireUser } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 

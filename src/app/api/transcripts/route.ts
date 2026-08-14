@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -91,6 +95,9 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 

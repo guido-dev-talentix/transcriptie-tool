@@ -59,6 +59,23 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   }
 }
 
+// Standaard-gate voor alle data-API-routes: ingelogd én goedgekeurd.
+// De middleware weert alleen niet-ingelogde bezoekers; zonder deze check zou
+// iedereen die zich aanmeldt (approved=false) direct bij de data kunnen.
+export async function requireUser(): Promise<AuthUser | NextResponse> {
+  const user = await getAuthUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Niet geautoriseerd' }, { status: 401 })
+  }
+
+  if (!user.approved) {
+    return NextResponse.json({ error: 'Account wacht op goedkeuring' }, { status: 403 })
+  }
+
+  return user
+}
+
 export interface TranscriptViewer {
   authId: string // Supabase auth-id (waarde die in Transcript.userId staat)
   dbId: string

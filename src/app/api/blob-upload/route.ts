@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
+import { requireUser } from '@/lib/auth'
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody
@@ -9,6 +10,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
+        // Alleen ingelogde, goedgekeurde gebruikers mogen upload-tokens krijgen.
+        // (De onUploadCompleted-callback komt van Vercel zelf, zonder sessie —
+        // daarom zit de check hier en niet bovenaan de handler.)
+        const authGate = await requireUser()
+        if (authGate instanceof NextResponse) {
+          throw new Error('Niet geautoriseerd om te uploaden')
+        }
+
         // Validate file type
         const allowedExtensions = ['.mp3', '.wav', '.m4a', '.mp4']
         const hasValidExtension = allowedExtensions.some((ext) =>
