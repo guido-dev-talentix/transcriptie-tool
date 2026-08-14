@@ -3,6 +3,14 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { upload } from '@vercel/blob/client'
 
+const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.mp4']
+
+function getFileExtension(filename: string): string {
+  const lower = filename.toLowerCase()
+  const idx = lower.lastIndexOf('.')
+  return idx >= 0 ? lower.substring(idx) : '(geen extensie)'
+}
+
 interface TranscriptResult {
   id: string
   filename: string
@@ -99,6 +107,15 @@ export default function UploadForm() {
   const handleAudioUpload = async (file: File) => {
     setError(null)
     setResult(null)
+
+    const ext = getFileExtension(file.name)
+    if (!ALLOWED_AUDIO_EXTENSIONS.includes(ext)) {
+      setError(
+        `Bestandstype ${ext} wordt niet ondersteund voor audio. Gebruik .mp3, .wav, .m4a of .mp4, of schakel bovenaan over naar PDF.`
+      )
+      return
+    }
+
     setIsUploading(true)
 
     // Determine if auto-processing should happen after upload
@@ -147,6 +164,15 @@ export default function UploadForm() {
   const handlePdfUpload = async (file: File) => {
     setError(null)
     setResult(null)
+
+    const ext = getFileExtension(file.name)
+    if (ext !== '.pdf') {
+      setError(
+        `Bestandstype ${ext} wordt niet ondersteund voor PDF-upload. Gebruik een .pdf bestand, of schakel bovenaan over naar Audio.`
+      )
+      return
+    }
+
     setIsUploading(true)
 
     // Determine if auto-processing should happen after upload

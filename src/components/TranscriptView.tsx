@@ -731,6 +731,16 @@ export default function TranscriptView({ id }: { id: string }) {
               {copied ? 'Gekopieerd!' : 'Kopieer tekst'}
             </button>
             <a
+              href={`/api/transcripts/${id}/download?format=obsidian`}
+              className="btn-secondary inline-flex items-center gap-2"
+              title="Export als Obsidian markdown"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M21.038 7.273L14.144.379a1.295 1.295 0 00-1.832 0L.379 12.312a1.295 1.295 0 000 1.832l6.894 6.894a1.295 1.295 0 001.832 0L21.038 9.105a1.295 1.295 0 000-1.832zM12 17.5a5.5 5.5 0 110-11 5.5 5.5 0 010 11z"/>
+              </svg>
+              Obsidian
+            </a>
+            <a
               href={`/api/transcripts/${id}/download?format=txt`}
               className="btn-secondary"
             >
