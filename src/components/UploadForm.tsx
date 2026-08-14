@@ -507,20 +507,6 @@ export default function UploadForm() {
             </select>
           </div>
 
-          {/* Privé */}
-          <label className="flex items-start gap-2 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg">
-            <input
-              type="checkbox"
-              checked={isPrivate}
-              onChange={(e) => handlePrivateToggle(e.target.checked)}
-              disabled={isUploading}
-              className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-            />
-            <span className="text-sm text-slate-700">
-              <span className="font-medium">🔒 Privé</span> — alleen zichtbaar voor jou, ook niet voor beheerders. Kan niet aan een project gekoppeld worden.
-            </span>
-          </label>
-
           {/* Processing Options - Pre-upload */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -579,6 +565,18 @@ export default function UploadForm() {
                 {!projectSelected && (
                   <span className="text-xs text-slate-400">Selecteer een project voor deze optie</span>
                 )}
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPrivate}
+                  onChange={(e) => handlePrivateToggle(e.target.checked)}
+                  disabled={isUploading}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="text-sm text-slate-700">🔒 Privé</span>
+                <span className="text-xs text-slate-400">Alleen zichtbaar voor jou</span>
               </label>
             </div>
           </div>
@@ -690,9 +688,7 @@ export default function UploadForm() {
           <div className="card">
             <label className="block text-sm font-medium text-slate-700 mb-2">Project</label>
             {isPrivate ? (
-              <p className="text-sm text-slate-500">
-                🔒 Privé-transcriptie — kan niet aan een project gekoppeld worden.
-              </p>
+              <p className="text-sm text-slate-500">🔒 Privé</p>
             ) : (
               <select
                 value={postProjectId}
