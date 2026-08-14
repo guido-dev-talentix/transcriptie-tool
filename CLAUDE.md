@@ -65,18 +65,20 @@ The AI process-transcript endpoint (`src/app/api/ai/process-transcript/route.ts`
 ### Import Alias
 `@/*` maps to `./src/*` (configured in `tsconfig.json`)
 
-## CLI (directe database-toegang)
+## CLI
 
-Er is een globaal commando `transcriptie` (wrapper naar `scripts/cli.mjs`, installatie via `scripts/install-cli.sh`) dat rechtstreeks uit de database leest — bedoeld om transcripties zonder knippen en plakken in een terminal of Claude-sessie te krijgen:
+Er is een globaal commando `transcriptie` (`scripts/cli.mjs`, installatie via `scripts/install-cli.sh`) om transcripties zonder knippen en plakken in een terminal of Claude-sessie te krijgen:
 
 ```bash
-transcriptie list [-n 20] [--zoek term] [--alles]  # recente transcripties
-transcriptie get <id|id-prefix>                    # opgeschoonde tekst naar stdout
-transcriptie laatste                               # meest recente transcriptie
-transcriptie zoek <term>                           # zoek in titel/bestand/tekst
+transcriptie list [-n 20] [--zoek term]  # recente transcripties
+transcriptie get <id|id-prefix>          # opgeschoonde tekst naar stdout
+transcriptie laatste                     # meest recente transcriptie
+transcriptie zoek <term>                 # zoek in titel/bestand/tekst
 ```
 
-Meta-info gaat naar stderr, stdout bevat alleen tekst (pipe-vriendelijk). Privé-transcripties van anderen worden standaard verborgen (`CLI_USER_EMAIL`, default guido@searchxrecruitment.com); `--alles` toont ze wel.
+Meta-info gaat naar stderr, stdout bevat alleen tekst (pipe-vriendelijk).
+
+Twee verbindingsmodi: met `TRANSCRIPTIE_TOKEN` gezet praat de CLI via `/api/cli/*` met de productie-app (werkt op elke machine, geen repo of database nodig, respecteert de privacy-filters van de token-eigenaar); zonder token leest hij rechtstreeks uit de database via `DATABASE_URL`. Tokens beheer je onder Mijn Profiel → CLI-tokens. Uitleg voor gebruikers: `CLI-UITLEG.md`.
 
 ## Privé-transcripties
 
