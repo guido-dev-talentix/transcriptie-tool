@@ -11,6 +11,7 @@ interface Transcript {
   status: string
   language: string | null
   createdAt: string
+  isPrivate?: boolean
 }
 
 function formatDuration(seconds: number | null): string {
@@ -124,6 +125,7 @@ export default function TranscriptList() {
           <div key={t.id} className="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between">
             <Link href={`/transcripts/${t.id}`} className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">
+                {t.isPrivate && <span title="Privé — alleen zichtbaar voor jou">🔒 </span>}
                 {t.title || t.filename}
               </p>
               <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">

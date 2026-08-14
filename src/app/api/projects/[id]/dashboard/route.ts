@@ -46,7 +46,9 @@ export async function GET(
       supersededDecisions,
       revokedDecisions,
     ] = await Promise.all([
-      prisma.transcript.count({ where: { projectId: id } }),
+      prisma.transcript.count({
+        where: { projectId: id, OR: [{ isPrivate: false }, { userId: access.user.id }] },
+      }),
       prisma.report.count({ where: { projectId: id } }),
       prisma.actionItem.count({ where: { projectId: id, status: 'open' } }),
       prisma.actionItem.count({ where: { projectId: id, status: 'in_progress' } }),
@@ -59,7 +61,7 @@ export async function GET(
     // Get recent activity
     const [recentTranscripts, recentReports, actionItemsRaw, recentDecisionsRaw] = await Promise.all([
       prisma.transcript.findMany({
-        where: { projectId: id },
+        where: { projectId: id, OR: [{ isPrivate: false }, { userId: access.user.id }] },
         orderBy: { createdAt: 'desc' },
         take: 10,
         select: {

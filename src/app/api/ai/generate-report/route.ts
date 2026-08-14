@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateReport } from '@/lib/ai'
+import { getTranscriptViewer, canViewTranscript } from '@/lib/auth'
 
 // POST /api/ai/generate-report - Generate report from transcript
 export async function POST(request: NextRequest) {
@@ -38,6 +39,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Transcriptie niet gevonden' },
         { status: 404 }
+      )
+    }
+
+    if (transcript.isPrivate) {
+      const viewer = await getTranscriptViewer()
+      if (!canViewTranscript(transcript, viewer)) {
+        return NextResponse.json(
+          { error: 'Transcriptie niet gevonden' },
+          { status: 404 }
+        )
+      }
+      // Verslagen leven in (gedeelde) projecten — daar horen privé-transcripties niet in
+      return NextResponse.json(
+        { error: 'Van een privé-transcriptie kan geen projectverslag gemaakt worden' },
+        { status: 400 }
       )
     }
 

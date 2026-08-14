@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getTranscriptionStatus, getSubtitles } from '@/lib/assemblyai'
+import { getTranscriptViewer, canViewTranscript } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +20,13 @@ export async function GET(
 
     if (!transcript) {
       return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+    }
+
+    if (transcript.isPrivate) {
+      const viewer = await getTranscriptViewer()
+      if (!canViewTranscript(transcript, viewer)) {
+        return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+      }
     }
 
     // If still processing, check AssemblyAI status
@@ -86,10 +94,27 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json()
-    const { title, projectId } = body
+    const { title, projectId, isPrivate } = body
     const { id } = await params
 
-    const updateData: { title?: string; projectId?: string | null } = {}
+    const existing = await prisma.transcript.findUnique({
+      where: { id },
+      select: { isPrivate: true, userId: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+    }
+
+    const viewer = await getTranscriptViewer()
+    if (!canViewTranscript(existing, viewer)) {
+      return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+    }
+
+    const isOwner =
+      !!viewer && !!existing.userId &&
+      (existing.userId === viewer.authId || existing.userId === viewer.dbId)
+
+    const updateData: { title?: string; projectId?: string | null; isPrivate?: boolean } = {}
 
     if (title !== undefined) {
       updateData.title = title
@@ -97,6 +122,30 @@ export async function PATCH(
 
     if (projectId !== undefined) {
       updateData.projectId = projectId || null
+    }
+
+    if (isPrivate !== undefined) {
+      // Alleen de eigenaar mag de privé-status wijzigen
+      if (!isOwner) {
+        return NextResponse.json(
+          { error: 'Alleen de eigenaar kan de privé-status wijzigen' },
+          { status: 403 }
+        )
+      }
+      updateData.isPrivate = Boolean(isPrivate)
+      // Privé-transcripties horen niet in (gedeelde) projecten
+      if (updateData.isPrivate) {
+        updateData.projectId = null
+      }
+    }
+
+    // Blokkeer projectkoppeling zolang de transcriptie privé is/blijft
+    const staysPrivate = updateData.isPrivate ?? existing.isPrivate
+    if (staysPrivate && updateData.projectId) {
+      return NextResponse.json(
+        { error: 'Een privé-transcriptie kan niet aan een project gekoppeld worden' },
+        { status: 400 }
+      )
     }
 
     const updated = await prisma.transcript.update({
@@ -125,6 +174,21 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+
+    const existing = await prisma.transcript.findUnique({
+      where: { id },
+      select: { isPrivate: true, userId: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+    }
+    if (existing.isPrivate) {
+      const viewer = await getTranscriptViewer()
+      if (!canViewTranscript(existing, viewer)) {
+        return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+      }
+    }
+
     await prisma.transcript.delete({
       where: { id },
     })

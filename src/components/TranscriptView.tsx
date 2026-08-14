@@ -21,6 +21,7 @@ interface Transcript {
   project?: { id: string; name: string } | null
   aiStatus: string | null
   aiError: string | null
+  isPrivate: boolean
 }
 
 interface Project {
@@ -188,6 +189,35 @@ export default function TranscriptView({ id }: { id: string }) {
       alert(err instanceof Error ? err.message : 'Project koppeling mislukt')
     } finally {
       setSavingProject(false)
+    }
+  }
+
+  const [savingPrivate, setSavingPrivate] = useState(false)
+
+  const handleTogglePrivate = async () => {
+    if (!transcript) return
+
+    setSavingPrivate(true)
+    try {
+      const response = await fetch(`/api/transcripts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPrivate: !transcript.isPrivate }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Privé-status wijzigen mislukt')
+      }
+
+      setTranscript(data)
+      if (data.isPrivate) {
+        setSelectedProjectId('')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Privé-status wijzigen mislukt')
+    } finally {
+      setSavingPrivate(false)
     }
   }
 
@@ -577,37 +607,72 @@ export default function TranscriptView({ id }: { id: string }) {
               </div>
             )}
 
+            {/* Privé-status */}
+            <div className="mb-5">
+              <div className="flex items-center gap-3">
+                {transcript.isPrivate && (
+                  <span className="badge badge-neutral" title="Alleen zichtbaar voor jou">
+                    🔒 Privé
+                  </span>
+                )}
+                <button
+                  onClick={handleTogglePrivate}
+                  disabled={savingPrivate || transcript.aiStatus === 'processing'}
+                  className="btn-secondary whitespace-nowrap text-sm"
+                >
+                  {savingPrivate
+                    ? 'Opslaan...'
+                    : transcript.isPrivate
+                      ? 'Zichtbaar maken voor team'
+                      : '🔒 Maak privé'}
+                </button>
+              </div>
+              {transcript.isPrivate && (
+                <p className="mt-2 text-sm text-slate font-body">
+                  Deze transcriptie is alleen zichtbaar voor jou, ook niet voor beheerders.
+                </p>
+              )}
+            </div>
+
             {/* Project selector */}
             <div className="mb-5">
               <label className="block text-sm font-display font-semibold text-primary mb-2">
                 Project koppelen
               </label>
-              <div className="flex items-center gap-3 max-w-md">
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="input flex-1"
-                  disabled={transcript.aiStatus === 'processing'}
-                >
-                  <option value="">Geen project</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                {selectedProjectId !== (transcript.projectId || '') && (
-                  <button
-                    onClick={handleSaveProject}
-                    disabled={savingProject || transcript.aiStatus === 'processing'}
-                    className="btn-secondary whitespace-nowrap"
-                  >
-                    {savingProject ? 'Opslaan...' : 'Opslaan'}
-                  </button>
-                )}
-              </div>
-              {transcript.project && (
-                <p className="mt-2 text-sm text-slate font-body">
-                  Huidig project: <span className="font-display font-semibold">{transcript.project.name}</span>
+              {transcript.isPrivate ? (
+                <p className="text-sm text-slate font-body">
+                  🔒 Privé-transcriptie — kan niet aan een project gekoppeld worden.
                 </p>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 max-w-md">
+                    <select
+                      value={selectedProjectId}
+                      onChange={(e) => setSelectedProjectId(e.target.value)}
+                      className="input flex-1"
+                      disabled={transcript.aiStatus === 'processing'}
+                    >
+                      <option value="">Geen project</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    {selectedProjectId !== (transcript.projectId || '') && (
+                      <button
+                        onClick={handleSaveProject}
+                        disabled={savingProject || transcript.aiStatus === 'processing'}
+                        className="btn-secondary whitespace-nowrap"
+                      >
+                        {savingProject ? 'Opslaan...' : 'Opslaan'}
+                      </button>
+                    )}
+                  </div>
+                  {transcript.project && (
+                    <p className="mt-2 text-sm text-slate font-body">
+                      Huidig project: <span className="font-display font-semibold">{transcript.project.name}</span>
+                    </p>
+                  )}
+                </>
               )}
             </div>
 

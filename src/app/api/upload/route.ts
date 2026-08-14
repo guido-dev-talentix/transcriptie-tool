@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         language: transcript.language_code,
         assemblyId: transcript.id,
         userId: user?.id || null,
+        isPrivate: formData.get('isPrivate') === 'true' && !!user,
       },
     })
 

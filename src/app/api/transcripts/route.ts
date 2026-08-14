@@ -30,19 +30,30 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const unlinked = searchParams.get('unlinked') === 'true'
 
+    // Privé-transcripties zijn alleen zichtbaar voor de eigenaar — ook voor admins
+    const ownerIds = dbUser ? [user.id, dbUser.id] : [user.id]
+    const privacyFilter = {
+      OR: [{ isPrivate: false }, { userId: { in: ownerIds } }],
+    }
+
     // Build filter: admins see all, regular users see own transcripts + project transcripts
     let whereFilter
     if (unlinked) {
-      whereFilter = { projectId: null, status: 'completed' }
+      whereFilter = { AND: [{ projectId: null, status: 'completed' }, privacyFilter] }
     } else if (isAdmin) {
-      whereFilter = undefined // admins see everything
+      whereFilter = privacyFilter
     } else {
       whereFilter = {
-        OR: [
-          // Transcripts from projects the user is a member of
-          { project: { users: { some: { userId: user.id } } } },
-          // User's own transcripts (including orphans without project)
-          { userId: user.id },
+        AND: [
+          {
+            OR: [
+              // Transcripts from projects the user is a member of
+              { project: { users: { some: { userId: user.id } } } },
+              // User's own transcripts (including orphans without project)
+              { userId: user.id },
+            ],
+          },
+          privacyFilter,
         ],
       }
     }
@@ -60,6 +71,8 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         projectId: true,
         aiStatus: true,
+        isPrivate: true,
+        userId: true,
         project: {
           select: { id: true, name: true },
         },
@@ -95,7 +108,7 @@ export async function DELETE(request: NextRequest) {
     // Verify user has access to the transcript's project
     const transcript = await prisma.transcript.findUnique({
       where: { id },
-      select: { projectId: true },
+      select: { projectId: true, isPrivate: true, userId: true },
     })
 
     if (!transcript) {
@@ -104,16 +117,24 @@ export async function DELETE(request: NextRequest) {
 
     let dbUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { role: true },
+      select: { id: true, role: true },
     })
     if (!dbUser && user.email) {
       dbUser = await prisma.user.findUnique({
         where: { email: user.email },
-        select: { role: true },
+        select: { id: true, role: true },
       })
     }
 
     const isAdmin = dbUser?.role === 'ADMIN'
+
+    // Privé-transcripties: alleen de eigenaar mag ze zien of verwijderen (404 om bestaan niet te lekken)
+    if (transcript.isPrivate) {
+      const ownerIds = dbUser ? [user.id, dbUser.id] : [user.id]
+      if (!transcript.userId || !ownerIds.includes(transcript.userId)) {
+        return NextResponse.json({ error: 'Transcriptie niet gevonden' }, { status: 404 })
+      }
+    }
 
     if (!isAdmin && transcript.projectId) {
       const membership = await prisma.userProject.findUnique({

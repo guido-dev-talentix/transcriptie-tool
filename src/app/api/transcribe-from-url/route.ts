@@ -15,7 +15,9 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { audioUrl, filename, title, projectId } = await request.json()
+    const { audioUrl, filename, title, projectId, isPrivate } = await request.json()
+    // Privé kan alleen met een ingelogde eigenaar, en zonder projectkoppeling
+    const markPrivate = Boolean(isPrivate) && !!user
 
     if (!audioUrl || !filename) {
       return NextResponse.json(
@@ -54,8 +56,9 @@ export async function POST(request: NextRequest) {
         srt,
         language: transcript.language_code,
         assemblyId: transcript.id,
-        projectId: projectId || null,
+        projectId: markPrivate ? null : (projectId || null),
         userId: user?.id || null,
+        isPrivate: markPrivate,
       },
     })
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getTranscriptViewer, canViewTranscript } from '@/lib/auth'
 
 function generateObsidianMarkdown(transcript: {
   title: string | null
@@ -138,6 +139,21 @@ export async function GET(
     const { searchParams } = new URL(request.url)
     const format = searchParams.get('format') || 'txt'
     const { id } = await params
+
+    // Privé-transcripties zijn alleen door de eigenaar te downloaden
+    const accessCheck = await prisma.transcript.findUnique({
+      where: { id },
+      select: { isPrivate: true, userId: true },
+    })
+    if (!accessCheck) {
+      return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+    }
+    if (accessCheck.isPrivate) {
+      const viewer = await getTranscriptViewer()
+      if (!canViewTranscript(accessCheck, viewer)) {
+        return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
+      }
+    }
 
     if (format === 'obsidian') {
       const transcript = await prisma.transcript.findUnique({
