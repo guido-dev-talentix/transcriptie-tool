@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { processTranscript, generateStatusUpdate, extractActionItems, extractDecisions, generateReport } from '@/lib/ai'
+import { getTranscriptViewer, canViewTranscript, requireUser } from '@/lib/auth'
 
 interface ProcessOptions {
   extractActionItems?: boolean
@@ -11,6 +12,9 @@ interface ProcessOptions {
 // POST /api/ai/process-transcript - Process transcript via streaming SSE
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const body = await request.json()
     const { transcriptId, projectId, options } = body
 
@@ -34,6 +38,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (transcript.isPrivate) {
+      const viewer = await getTranscriptViewer()
+      if (!canViewTranscript(transcript, viewer)) {
+        return NextResponse.json(
+          { error: 'Transcriptie niet gevonden' },
+          { status: 404 }
+        )
+      }
+    }
+
     if (!transcript.text) {
       return NextResponse.json(
         { error: 'Transcriptie heeft geen tekst om te verwerken' },
@@ -54,9 +68,12 @@ export async function POST(request: NextRequest) {
       console.log(`AI processing stuck for ${Math.round(msSinceUpdate / 60000)}m, allowing retry for transcript ${transcript.id}`)
     }
 
-    // Resolve project name
+    // Resolve project name — privé-transcripties worden nooit aan een project
+    // gekoppeld (dan zouden actiepunten/besluiten in gedeelde projecten lekken)
     let projectName = transcript.project?.name
-    const effectiveProjectId = projectId || transcript.projectId
+    const effectiveProjectId = transcript.isPrivate
+      ? null
+      : (projectId || transcript.projectId)
     if (projectId && !transcript.project) {
       const project = await prisma.project.findUnique({
         where: { id: projectId },

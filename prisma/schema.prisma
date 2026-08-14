@@ -23,6 +23,7 @@ model Transcript {
   cleanedText String?
   projectId   String?
   userId      String?
+  isPrivate   Boolean      @default(false) // alleen zichtbaar voor de eigenaar (userId)
   summary     String?
   aiStatus    String?      // null = not started, "processing" = in progress, "completed" = done, "error" = failed
   aiError     String?

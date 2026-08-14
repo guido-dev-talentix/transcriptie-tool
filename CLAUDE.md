@@ -65,6 +65,23 @@ The AI process-transcript endpoint (`src/app/api/ai/process-transcript/route.ts`
 ### Import Alias
 `@/*` maps to `./src/*` (configured in `tsconfig.json`)
 
+## CLI (directe database-toegang)
+
+Er is een globaal commando `transcriptie` (wrapper naar `scripts/cli.mjs`, installatie via `scripts/install-cli.sh`) dat rechtstreeks uit de database leest — bedoeld om transcripties zonder knippen en plakken in een terminal of Claude-sessie te krijgen:
+
+```bash
+transcriptie list [-n 20] [--zoek term] [--alles]  # recente transcripties
+transcriptie get <id|id-prefix>                    # opgeschoonde tekst naar stdout
+transcriptie laatste                               # meest recente transcriptie
+transcriptie zoek <term>                           # zoek in titel/bestand/tekst
+```
+
+Meta-info gaat naar stderr, stdout bevat alleen tekst (pipe-vriendelijk). Privé-transcripties van anderen worden standaard verborgen (`CLI_USER_EMAIL`, default guido@searchxrecruitment.com); `--alles` toont ze wel.
+
+## Privé-transcripties
+
+`Transcript.isPrivate` maakt een transcriptie alleen zichtbaar voor de eigenaar (`userId`) — ook admins zien hem niet (routes geven 404 om het bestaan niet te lekken). Privé-transcripties kunnen niet aan een project gekoppeld worden (anders zouden actiepunten/besluiten/verslagen in gedeelde projecten lekken); AI-verwerking doet dan alleen opschonen + samenvatting. Filter-helpers: `getTranscriptViewer()`, `transcriptPrivacyWhere()` en `canViewTranscript()` in `src/lib/auth.ts` — gebruik die in elke nieuwe route die transcripties leest.
+
 ## Environment Variables
 
 Required:

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, requireUser } from '@/lib/auth'
 
 // PATCH /api/folders/[id] - Rename a folder
 export async function PATCH(
@@ -8,6 +8,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const { id } = await params
     const user = await getAuthUser()
     if (!user) {
@@ -59,6 +62,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const { id } = await params
     const user = await getAuthUser()
     if (!user) {

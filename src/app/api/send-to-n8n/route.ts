@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { notifyN8N, Destination } from '@/lib/webhook'
+import { requireUser } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const data = await request.json()
 
     if (!data.transcriptId || !data.filename) {

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, requireUser } from '@/lib/auth'
 
 // GET /api/folders - List current user's folders with project counts
 export async function GET() {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const user = await getAuthUser()
     if (!user) {
       return NextResponse.json(
@@ -36,6 +39,9 @@ export async function GET() {
 // POST /api/folders - Create a folder
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const user = await getAuthUser()
     if (!user) {
       return NextResponse.json(

@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { createClient } from '@/lib/supabase/server'
 import { extractText } from 'unpdf'
+import { requireUser } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
+    const authGate = await requireUser()
+    if (authGate instanceof NextResponse) return authGate
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -12,6 +16,8 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null
     const title = formData.get('title') as string | null
     const projectId = formData.get('projectId') as string | null
+    // Privé kan alleen met een ingelogde eigenaar, en zonder projectkoppeling
+    const markPrivate = formData.get('isPrivate') === 'true' && !!user
 
     if (!file) {
       return NextResponse.json({ error: 'Geen bestand gevonden' }, { status: 400 })
@@ -44,8 +50,9 @@ export async function POST(request: NextRequest) {
         status: 'completed',
         text: text.trim(),
         language: 'nl', // Assume Dutch
-        projectId: projectId || null,
+        projectId: markPrivate ? null : (projectId || null),
         userId: user?.id || null,
+        isPrivate: markPrivate,
       },
       include: {
         project: {

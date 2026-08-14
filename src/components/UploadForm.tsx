@@ -3,6 +3,14 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { upload } from '@vercel/blob/client'
 
+const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.mp4']
+
+function getFileExtension(filename: string): string {
+  const lower = filename.toLowerCase()
+  const idx = lower.lastIndexOf('.')
+  return idx >= 0 ? lower.substring(idx) : '(geen extensie)'
+}
+
 interface TranscriptResult {
   id: string
   filename: string
@@ -37,6 +45,7 @@ export default function UploadForm() {
   const [title, setTitle] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+  const [isPrivate, setIsPrivate] = useState(false)
 
   // Staged file (selected but not yet uploaded)
   const [stagedFile, setStagedFile] = useState<File | null>(null)
@@ -99,6 +108,15 @@ export default function UploadForm() {
   const handleAudioUpload = async (file: File) => {
     setError(null)
     setResult(null)
+
+    const ext = getFileExtension(file.name)
+    if (!ALLOWED_AUDIO_EXTENSIONS.includes(ext)) {
+      setError(
+        `Bestandstype ${ext} wordt niet ondersteund voor audio. Gebruik .mp3, .wav, .m4a of .mp4, of schakel bovenaan over naar PDF.`
+      )
+      return
+    }
+
     setIsUploading(true)
 
     // Determine if auto-processing should happen after upload
@@ -122,7 +140,8 @@ export default function UploadForm() {
           audioUrl: blob.url,
           filename: file.name,
           title: title.trim() || undefined,
-          projectId: selectedProjectId || undefined,
+          projectId: isPrivate ? undefined : (selectedProjectId || undefined),
+          isPrivate,
         }),
       })
 
@@ -147,6 +166,15 @@ export default function UploadForm() {
   const handlePdfUpload = async (file: File) => {
     setError(null)
     setResult(null)
+
+    const ext = getFileExtension(file.name)
+    if (ext !== '.pdf') {
+      setError(
+        `Bestandstype ${ext} wordt niet ondersteund voor PDF-upload. Gebruik een .pdf bestand, of schakel bovenaan over naar Audio.`
+      )
+      return
+    }
+
     setIsUploading(true)
 
     // Determine if auto-processing should happen after upload
@@ -159,7 +187,8 @@ export default function UploadForm() {
       const formData = new FormData()
       formData.append('file', file)
       if (title.trim()) formData.append('title', title.trim())
-      if (selectedProjectId) formData.append('projectId', selectedProjectId)
+      if (selectedProjectId && !isPrivate) formData.append('projectId', selectedProjectId)
+      if (isPrivate) formData.append('isPrivate', 'true')
 
       const response = await fetch('/api/upload-pdf', {
         method: 'POST',
@@ -399,7 +428,18 @@ export default function UploadForm() {
     }
   }
 
-  const projectSelected = selectedProjectId !== ''
+  const projectSelected = selectedProjectId !== '' && !isPrivate
+
+  const handlePrivateToggle = (checked: boolean) => {
+    setIsPrivate(checked)
+    if (checked) {
+      // Privé-transcripties horen niet in (gedeelde) projecten
+      setSelectedProjectId('')
+      setOptExtractActionItems(false)
+      setOptExtractDecisions(false)
+      setOptGenerateReport(false)
+    }
+  }
 
   return (
     <div className="w-full">
@@ -457,7 +497,7 @@ export default function UploadForm() {
               id="project"
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              disabled={isUploading}
+              disabled={isUploading || isPrivate}
               className="input"
             >
               <option value="">Geen project</option>
@@ -466,6 +506,20 @@ export default function UploadForm() {
               ))}
             </select>
           </div>
+
+          {/* Privé */}
+          <label className="flex items-start gap-2 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg">
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={(e) => handlePrivateToggle(e.target.checked)}
+              disabled={isUploading}
+              className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            />
+            <span className="text-sm text-slate-700">
+              <span className="font-medium">🔒 Privé</span> — alleen zichtbaar voor jou, ook niet voor beheerders. Kan niet aan een project gekoppeld worden.
+            </span>
+          </label>
 
           {/* Processing Options - Pre-upload */}
           <div>
@@ -635,17 +689,23 @@ export default function UploadForm() {
           {/* Project selector */}
           <div className="card">
             <label className="block text-sm font-medium text-slate-700 mb-2">Project</label>
-            <select
-              value={postProjectId}
-              onChange={(e) => handleProjectChange(e.target.value)}
-              disabled={isAiProcessing}
-              className="input"
-            >
-              <option value="">Geen project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            {isPrivate ? (
+              <p className="text-sm text-slate-500">
+                🔒 Privé-transcriptie — kan niet aan een project gekoppeld worden.
+              </p>
+            ) : (
+              <select
+                value={postProjectId}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                disabled={isAiProcessing}
+                className="input"
+              >
+                <option value="">Geen project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* AI Processing Status - inline */}
