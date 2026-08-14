@@ -42,6 +42,21 @@ model User {
   updatedAt DateTime      @updatedAt
   projects  UserProject[]
   folders   Folder[]
+  apiTokens ApiToken[]
+}
+
+// Persoonlijk token voor de CLI — alleen de SHA-256-hash wordt bewaard,
+// het token zelf is na aanmaken niet meer op te vragen.
+model ApiToken {
+  id         String   @id @default(cuid())
+  name       String
+  tokenHash  String   @unique
+  userId     String
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Project {

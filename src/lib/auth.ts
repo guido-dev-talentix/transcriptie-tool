@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { prisma } from '@/lib/db'
 import { NextResponse } from 'next/server'
+import { createHash, randomBytes } from 'node:crypto'
 
 export interface AuthUser {
   id: string
@@ -57,6 +58,57 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     role: dbUser.role,
     approved: dbUser.approved,
   }
+}
+
+// CLI-tokens: alleen de hash gaat de database in, zodat een datalek geen
+// bruikbare tokens oplevert.
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+export function generateToken(): string {
+  return `txt_${randomBytes(32).toString('hex')}`
+}
+
+// Authenticatie voor /api/cli/* — Bearer-token in plaats van een sessiecookie.
+// Geeft dezelfde AuthUser terug als een ingelogde sessie, zodat de
+// privacy-filters hieronder identiek werken.
+export async function getUserFromToken(request: Request): Promise<AuthUser | null> {
+  const header = request.headers.get('authorization')
+  if (!header?.startsWith('Bearer ')) return null
+
+  const token = header.slice('Bearer '.length).trim()
+  if (!token) return null
+
+  const apiToken = await prisma.apiToken.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: { user: true },
+  })
+
+  if (!apiToken || !apiToken.user.approved) return null
+
+  // Bijhouden wanneer een token voor het laatst gebruikt is (best effort)
+  prisma.apiToken
+    .update({ where: { id: apiToken.id }, data: { lastUsedAt: new Date() } })
+    .catch(() => {})
+
+  return {
+    id: apiToken.user.id,
+    email: apiToken.user.email,
+    role: apiToken.user.role,
+    approved: apiToken.user.approved,
+  }
+}
+
+export async function requireToken(request: Request): Promise<AuthUser | NextResponse> {
+  const user = await getUserFromToken(request)
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Ongeldig of ontbrekend token' },
+      { status: 401 }
+    )
+  }
+  return user
 }
 
 // Standaard-gate voor alle data-API-routes: ingelogd én goedgekeurd.

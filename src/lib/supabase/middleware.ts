@@ -2,6 +2,12 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+    // CLI-routes authenticeren zelf met een Bearer-token en hebben geen
+    // sessiecookie — die mogen niet naar /login geredirect worden.
+    if (request.nextUrl.pathname.startsWith('/api/cli')) {
+        return NextResponse.next({ request: { headers: request.headers } })
+    }
+
     let response = NextResponse.next({
         request: {
             headers: request.headers,
