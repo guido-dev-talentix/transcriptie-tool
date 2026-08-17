@@ -11,7 +11,7 @@ Je hebt twee dingen nodig: het script en een persoonlijk token.
 
 ### 1. Token aanmaken
 
-Ga naar https://transcriptie-tool-liard.vercel.app/profile → **CLI-tokens** →
+Ga naar https://transcriptie.talentix.ai/profile → **CLI-tokens** →
 **Nieuw token**. Geef het een naam waaraan je later herkent waar het draait
 (bijvoorbeeld "laptop Tess").
 
