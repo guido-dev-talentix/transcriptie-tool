@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.github
+.planning
+.claude
+.vercel
+# Geen env-bestanden in het image; runtime-env komt via docker-compose env_file,
+# NEXT_PUBLIC_* via build-args
+.env
+.env.*
+*.tsbuildinfo
+.DS_Store
+README.md
+CLI-UITLEG.md
+AGENTS.md
+CLAUDE.md
