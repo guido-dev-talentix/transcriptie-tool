@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getTranscriptionStatus, getSubtitles } from '@/lib/assemblyai'
+import { syncTranscriptWithAssemblyAI, WEBHOOK_HEADER_NAME } from '@/lib/assemblyai'
 import { notifyN8N } from '@/lib/webhook'
 
+// POST /api/webhook — aangeroepen door AssemblyAI zodra een transcriptie klaar is
 export async function POST(request: NextRequest) {
   try {
+    const secret = process.env.ASSEMBLYAI_WEBHOOK_SECRET
+    if (secret && request.headers.get(WEBHOOK_HEADER_NAME) !== secret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { transcript_id, status } = body
 
@@ -14,62 +20,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing transcript_id' }, { status: 400 })
     }
 
-    // Find the transcript record
     const transcript = await prisma.transcript.findFirst({
       where: { assemblyId: transcript_id },
+      select: { id: true, assemblyId: true, filename: true, status: true },
     })
 
-    if (!transcript) {
+    if (!transcript || !transcript.assemblyId) {
       console.error('Transcript not found for assemblyId:', transcript_id)
       return NextResponse.json({ error: 'Transcript not found' }, { status: 404 })
     }
 
-    if (status === 'completed') {
-      // Fetch full transcription result
-      const result = await getTranscriptionStatus(transcript_id)
+    // Al verwerkt (bijv. via polling) — niets meer te doen
+    if (transcript.status === 'completed') {
+      return NextResponse.json({ received: true })
+    }
 
-      // Get SRT subtitles
-      let srt: string | undefined
-      try {
-        srt = await getSubtitles(transcript_id, 'srt')
-      } catch (e) {
-        console.error('Failed to get subtitles:', e)
-      }
+    // Status en tekst altijd rechtstreeks bij AssemblyAI ophalen, niet uit de
+    // webhook-body vertrouwen
+    const updated = await syncTranscriptWithAssemblyAI({
+      id: transcript.id,
+      assemblyId: transcript.assemblyId,
+    })
 
-      // Update database
-      await prisma.transcript.update({
-        where: { id: transcript.id },
-        data: {
-          status: 'completed',
-          text: result.text,
-          srt,
-          duration: result.audio_duration ? Math.round(result.audio_duration) : null,
-          language: result.language_code,
-        },
-      })
-
-      // Notify N8N
+    if (updated?.status === 'completed') {
       await notifyN8N({
-        transcriptId: transcript.id,
-        filename: transcript.filename,
+        transcriptId: updated.id,
+        filename: updated.filename,
         status: 'completed',
-        text: result.text,
-        duration: result.audio_duration ? Math.round(result.audio_duration) : undefined,
+        text: updated.text ?? undefined,
+        duration: updated.duration ?? undefined,
       })
-    } else if (status === 'error') {
-      const result = await getTranscriptionStatus(transcript_id)
-
-      await prisma.transcript.update({
-        where: { id: transcript.id },
-        data: {
-          status: 'error',
-          error: result.error || 'Unknown error',
-        },
-      })
-
+    } else if (updated?.status === 'error') {
       await notifyN8N({
-        transcriptId: transcript.id,
-        filename: transcript.filename,
+        transcriptId: updated.id,
+        filename: updated.filename,
         status: 'error',
       })
     }
