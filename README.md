@@ -13,7 +13,7 @@ Een Next.js web applicatie voor audio transcriptie met AssemblyAI API.
 
 ## Vereisten
 
-- Node.js 18+
+- Node.js 22+
 - AssemblyAI API key ([gratis registreren](https://www.assemblyai.com/))
 
 ## Installatie
@@ -62,12 +62,14 @@ Open [http://localhost:3000](http://localhost:3000) in je browser.
 
 | Endpoint | Methode | Beschrijving |
 |----------|---------|--------------|
-| `/api/upload` | POST | Upload audio en start transcriptie |
+| `/api/upload/chunk` | PUT | Ontvangt één stuk (16 MB) van een audiobestand |
+| `/api/upload/complete` | POST | Stuurt de stukken naar AssemblyAI en start de transcriptie |
 | `/api/webhook` | POST | AssemblyAI callback endpoint |
 | `/api/transcripts` | GET | Lijst alle transcripties |
-| `/api/transcripts/[id]` | GET | Haal specifieke transcriptie op |
+| `/api/transcripts/[id]` | GET | Haal specifieke transcriptie op (pollt AssemblyAI zolang hij loopt) |
 | `/api/transcripts/[id]` | DELETE | Verwijder transcriptie |
 | `/api/transcripts/[id]/download` | GET | Download als .txt of .srt |
+| `/api/version` | GET | Build-sha (deploy-check) |
 
 ## Webhook voor N8N
 
@@ -86,34 +88,20 @@ Voorbeeld payload:
 }
 ```
 
-## Deployment naar Vercel
+## Deployment
 
-1. Push de code naar GitHub
-2. Importeer het project in Vercel
-3. Stel de environment variables in:
-   - `ASSEMBLYAI_API_KEY`
-   - `NEXT_PUBLIC_BASE_URL` (je Vercel URL)
-   - `DATABASE_URL` (Vercel Postgres of Supabase URL)
-   - `N8N_WEBHOOK_URL` (optioneel)
-
-4. Voor productie database: update `prisma/schema.prisma`:
-
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-```
+Productie draait als Docker-container op de agents-VPS achter Caddy
+(https://transcriptie.talentix.ai). Elke push naar `main` deployt via
+`.github/workflows/deploy.yml`: rsync naar de VPS → `docker compose up -d --build`
+→ controle dat `/api/version` de nieuwe commit-sha teruggeeft. Zie `CLAUDE.md`
+voor details en handmatige fallback.
 
 ## Lokale webhook testen
 
-Gebruik [ngrok](https://ngrok.com/) om een publieke URL voor je lokale server te krijgen:
-
-```bash
-ngrok http 3000
-```
-
-Update `NEXT_PUBLIC_BASE_URL` in `.env.local` met de ngrok URL.
+Lokaal (http://localhost) stuurt de app géén webhook-URL mee naar AssemblyAI;
+`/api/transcripts/[id]` haalt de status zelf op zolang een transcriptie loopt.
+Wil je de webhook toch testen, gebruik dan [ngrok](https://ngrok.com/) en zet
+`NEXT_PUBLIC_BASE_URL` op de https-URL van ngrok.
 
 ## Licentie
 

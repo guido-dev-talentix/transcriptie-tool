@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-const DEFAULT_URL = 'https://transcriptie-tool-liard.vercel.app'
+const DEFAULT_URL = 'https://transcriptie.talentix.ai'
 
 // .env.local / .env inlezen als ze er zijn (zonder dotenv-dependency).
 // Ontbreken ze — bijvoorbeeld bij een collega met alleen dit script — dan

@@ -1,14 +1,114 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { upload } from '@vercel/blob/client'
+import {
+  ALLOWED_AUDIO_EXTENSIONS,
+  CHUNK_SIZE,
+  DEFAULT_MAX_UPLOAD_BYTES,
+  formatMegabytes,
+} from '@/lib/upload-constants'
 
-const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.mp4']
+const CHUNK_RETRIES = 3
+const POLL_INTERVAL_MS = 4000
+// Langer dan dit blijven we niet in dit scherm wachten; de transcriptie loopt
+// door en verschijnt in het overzicht (AssemblyAI doet normaal minuten, geen uren)
+const MAX_WAIT_MS = 2 * 60 * 60 * 1000
 
 function getFileExtension(filename: string): string {
   const lower = filename.toLowerCase()
   const idx = lower.lastIndexOf('.')
   return idx >= 0 ? lower.substring(idx) : '(geen extensie)'
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+class UploadError extends Error {
+  constructor(message: string, readonly retryable: boolean) {
+    super(message)
+  }
+}
+
+// Eén stuk versturen via XHR (fetch geeft geen upload-voortgang)
+function putChunk(url: string, blob: Blob, onProgress: (loaded: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded)
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+        return
+      }
+      let message = `Upload mislukt (${xhr.status})`
+      try {
+        message = JSON.parse(xhr.responseText).error || message
+      } catch { /* geen JSON */ }
+      reject(new UploadError(message, xhr.status >= 500))
+    }
+    xhr.onerror = () => reject(new UploadError('Netwerkfout tijdens uploaden', true))
+    xhr.send(blob)
+  })
+}
+
+// Bestand in stukken van CHUNK_SIZE naar de server sturen; elk stuk wordt bij
+// een netwerkfout opnieuw geprobeerd zonder het hele bestand opnieuw te sturen.
+async function uploadInChunks(
+  file: File,
+  onProgress: (fraction: number) => void
+): Promise<{ uploadId: string; totalChunks: number }> {
+  const uploadId = crypto.randomUUID()
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE))
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE
+    const blob = file.slice(start, Math.min(file.size, start + CHUNK_SIZE))
+    const url = `/api/upload/chunk?uploadId=${uploadId}&index=${i}`
+
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await putChunk(url, blob, (loaded) => onProgress((start + loaded) / file.size))
+        break
+      } catch (err) {
+        const retryable = err instanceof UploadError ? err.retryable : true
+        if (!retryable || attempt >= CHUNK_RETRIES) throw err
+        await sleep(1000 * attempt)
+      }
+    }
+  }
+
+  onProgress(1)
+  return { uploadId, totalChunks }
+}
+
+// Wachten tot AssemblyAI klaar is; de server haalt de status op als de webhook
+// nog niet binnen is
+async function waitForTranscript(id: string): Promise<TranscriptResult> {
+  let failures = 0
+  const deadline = Date.now() + MAX_WAIT_MS
+  while (true) {
+    if (Date.now() > deadline) {
+      throw new Error('De transcriptie duurt ongewoon lang. Hij loopt door op de achtergrond — bekijk de status in het overzicht.')
+    }
+    await sleep(POLL_INTERVAL_MS)
+    let response: Response
+    try {
+      response = await fetch(`/api/transcripts/${id}`)
+    } catch {
+      if (++failures >= 5) throw new Error('Verbinding met de server verbroken. Bekijk de status in het overzicht.')
+      continue
+    }
+    if (!response.ok) {
+      if (++failures >= 5) throw new Error('Status ophalen mislukt. Bekijk de status in het overzicht.')
+      continue
+    }
+    failures = 0
+    const data = await response.json()
+    if (data.status === 'completed') return data
+    if (data.status === 'error') throw new Error(data.error || 'Transcriptie mislukt')
+  }
 }
 
 interface TranscriptResult {
@@ -116,6 +216,12 @@ export default function UploadForm() {
       )
       return
     }
+    if (file.size > DEFAULT_MAX_UPLOAD_BYTES) {
+      setError(
+        `Dit bestand is ${formatMegabytes(file.size)}; het maximum is ${formatMegabytes(DEFAULT_MAX_UPLOAD_BYTES)}. Comprimeer de opname (bijv. naar .m4a) en probeer opnieuw.`
+      )
+      return
+    }
 
     setIsUploading(true)
 
@@ -124,20 +230,21 @@ export default function UploadForm() {
     autoProcessRef.current = shouldAutoProcess
 
     try {
-      setUploadProgress('Uploaden...')
+      setUploadProgress('Uploaden... 0%')
 
-      const blob = await upload(file.name, file, {
-        access: 'public',
-        handleUploadUrl: '/api/blob-upload',
+      const { uploadId, totalChunks } = await uploadInChunks(file, (fraction) => {
+        setUploadProgress(`Uploaden... ${Math.min(100, Math.round(fraction * 100))}%`)
       })
 
       setUploadProgress('Transcriptie starten...')
 
-      const response = await fetch('/api/transcribe-from-url', {
+      const response = await fetch('/api/upload/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          audioUrl: blob.url,
+          uploadId,
+          totalChunks,
+          size: file.size,
           filename: file.name,
           title: title.trim() || undefined,
           projectId: isPrivate ? undefined : (selectedProjectId || undefined),
@@ -145,11 +252,15 @@ export default function UploadForm() {
         }),
       })
 
-      const data = await response.json()
+      const started = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Transcriptie mislukt')
+        throw new Error(started.error || 'Transcriptie starten mislukt')
       }
+
+      setUploadProgress('Transcriberen... dit duurt enkele minuten bij lange opnames')
+
+      const data = await waitForTranscript(started.id)
 
       setResult(data)
       setEditableTitle(data.title || data.filename.replace(/\.[^/.]+$/, ''))
@@ -591,6 +702,11 @@ export default function UploadForm() {
               <div className="space-y-3">
                 <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-sky-500 animate-spin mx-auto" />
                 <p className="text-sm text-slate-600">{uploadProgress}</p>
+                {uploadProgress?.startsWith('Transcriberen') && (
+                  <p className="text-xs text-slate-400">
+                    Je kunt deze pagina sluiten — de transcriptie verschijnt vanzelf in het overzicht.
+                  </p>
+                )}
               </div>
             </div>
           ) : stagedFile ? (

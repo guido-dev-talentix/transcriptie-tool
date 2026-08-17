@@ -1,10 +1,15 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Routes zonder sessiecookie die niet naar /login geredirect mogen worden:
+// - /api/cli: Bearer-token
+// - /api/webhook: AssemblyAI-callback (geheime header)
+// - /api/cron: keep-alive-ping (CRON_SECRET)
+// - /api/version: publieke build-info voor de deploy-check
+const SESSIONLESS_PREFIXES = ['/api/cli', '/api/webhook', '/api/cron', '/api/version']
+
 export async function updateSession(request: NextRequest) {
-    // CLI-routes authenticeren zelf met een Bearer-token en hebben geen
-    // sessiecookie — die mogen niet naar /login geredirect worden.
-    if (request.nextUrl.pathname.startsWith('/api/cli')) {
+    if (SESSIONLESS_PREFIXES.some((p) => request.nextUrl.pathname.startsWith(p))) {
         return NextResponse.next({ request: { headers: request.headers } })
     }
 

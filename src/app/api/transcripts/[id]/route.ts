@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getTranscriptionStatus, getSubtitles } from '@/lib/assemblyai'
+import { syncTranscriptWithAssemblyAI } from '@/lib/assemblyai'
 import { getTranscriptViewer, canViewTranscript, requireUser } from '@/lib/auth'
 
 export async function GET(
@@ -32,53 +32,13 @@ export async function GET(
       }
     }
 
-    // If still processing, check AssemblyAI status
-    if (transcript.status === 'processing' && transcript.assemblyId) {
-      const result = await getTranscriptionStatus(transcript.assemblyId)
-
-      if (result.status === 'completed') {
-        // Get SRT subtitles
-        let srt: string | undefined
-        try {
-          srt = await getSubtitles(transcript.assemblyId, 'srt')
-        } catch (e) {
-          console.error('Failed to get subtitles:', e)
-        }
-
-        // Update database
-        const updated = await prisma.transcript.update({
-          where: { id: transcript.id },
-          data: {
-            status: 'completed',
-            text: result.text,
-            srt,
-            duration: result.audio_duration ? Math.round(result.audio_duration) : null,
-            language: result.language_code,
-          },
-          include: {
-            project: {
-              select: { id: true, name: true },
-            },
-          },
-        })
-
-        return NextResponse.json(updated)
-      } else if (result.status === 'error') {
-        const updated = await prisma.transcript.update({
-          where: { id: transcript.id },
-          data: {
-            status: 'error',
-            error: result.error || 'Unknown error',
-          },
-          include: {
-            project: {
-              select: { id: true, name: true },
-            },
-          },
-        })
-
-        return NextResponse.json(updated)
-      }
+    // Nog bezig: status bij AssemblyAI ophalen (polling-fallback naast de webhook)
+    if ((transcript.status === 'processing' || transcript.status === 'pending') && transcript.assemblyId) {
+      const updated = await syncTranscriptWithAssemblyAI({
+        id: transcript.id,
+        assemblyId: transcript.assemblyId,
+      })
+      if (updated) return NextResponse.json(updated)
     }
 
     return NextResponse.json(transcript)

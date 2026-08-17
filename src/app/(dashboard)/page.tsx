@@ -22,7 +22,7 @@ export default function Home() {
         <span>•</span>
         <span>PDF</span>
         <span>•</span>
-        <span>Max 100MB</span>
+        <span>Max 2 GB</span>
       </div>
     </div>
   )

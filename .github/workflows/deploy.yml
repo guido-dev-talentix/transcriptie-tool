@@ -1,0 +1,74 @@
+name: Deploy productie
+
+# Deployt main naar de agents-VPS bij elke push naar main (merge van een PR).
+# .env.production staat alléén op de server en wordt door --exclude beschermd
+# tegen rsync --delete.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Nooit twee deploys tegelijk; een nieuwe wacht tot de vorige klaar is.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  VPS: root@159.223.11.74
+  APP_DIR: /opt/transcriptie
+  APP_URL: https://transcriptie.talentix.ai
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: SSH-key en host-key installeren
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "159.223.11.74 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG/EuJJXyzEI4RD8mdme6m4guo51HfyrBGRbHySe+p3M" >> ~/.ssh/known_hosts
+
+      - name: Sync naar VPS
+        run: |
+          rsync -az --delete \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.planning' \
+            --exclude='.claude' \
+            --exclude='.vercel' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='.DS_Store' \
+            ./ "$VPS:$APP_DIR/"
+
+      - name: Build & herstart op VPS
+        run: |
+          ssh "$VPS" "cd $APP_DIR && GIT_SHA=${{ github.sha }} BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ) docker compose --env-file .env.production up -d --build && docker image prune -f >/dev/null"
+
+      - name: Verifieer live versie
+        run: |
+          for i in $(seq 1 12); do
+            sha=$(curl -fsS --max-time 10 "$APP_URL/api/version" | jq -r .sha || true)
+            if [ "$sha" = "${{ github.sha }}" ]; then
+              echo "✅ Live draait ${{ github.sha }}"
+              exit 0
+            fi
+            echo "Poging $i/12: live=$sha, verwacht=${{ github.sha }} — wacht 10s"
+            sleep 10
+          done
+          echo "::error::Live versie kwam na 2 minuten niet overeen met main"
+          exit 1
