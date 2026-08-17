@@ -1,13 +1,18 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import {
+  ALLOWED_AUDIO_EXTENSIONS,
+  CHUNK_SIZE,
+  DEFAULT_MAX_UPLOAD_BYTES,
+  formatMegabytes,
+} from '@/lib/upload-constants'
 
-const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.mp4']
-
-// Moet gelijk zijn aan CHUNK_SIZE in src/lib/uploads.ts
-const CHUNK_SIZE = 16 * 1024 * 1024
 const CHUNK_RETRIES = 3
 const POLL_INTERVAL_MS = 4000
+// Langer dan dit blijven we niet in dit scherm wachten; de transcriptie loopt
+// door en verschijnt in het overzicht (AssemblyAI doet normaal minuten, geen uren)
+const MAX_WAIT_MS = 2 * 60 * 60 * 1000
 
 function getFileExtension(filename: string): string {
   const lower = filename.toLowerCase()
@@ -82,7 +87,11 @@ async function uploadInChunks(
 // nog niet binnen is
 async function waitForTranscript(id: string): Promise<TranscriptResult> {
   let failures = 0
+  const deadline = Date.now() + MAX_WAIT_MS
   while (true) {
+    if (Date.now() > deadline) {
+      throw new Error('De transcriptie duurt ongewoon lang. Hij loopt door op de achtergrond — bekijk de status in het overzicht.')
+    }
     await sleep(POLL_INTERVAL_MS)
     let response: Response
     try {
@@ -204,6 +213,12 @@ export default function UploadForm() {
     if (!ALLOWED_AUDIO_EXTENSIONS.includes(ext)) {
       setError(
         `Bestandstype ${ext} wordt niet ondersteund voor audio. Gebruik .mp3, .wav, .m4a of .mp4, of schakel bovenaan over naar PDF.`
+      )
+      return
+    }
+    if (file.size > DEFAULT_MAX_UPLOAD_BYTES) {
+      setError(
+        `Dit bestand is ${formatMegabytes(file.size)}; het maximum is ${formatMegabytes(DEFAULT_MAX_UPLOAD_BYTES)}. Comprimeer de opname (bijv. naar .m4a) en probeer opnieuw.`
       )
       return
     }

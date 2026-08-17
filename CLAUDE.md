@@ -37,8 +37,8 @@ npm run db:studio    # Open Prisma Studio (database GUI)
 - `src/app/api/` — API route handlers
 
 ### Upload- en transcriptieflow
-1. `UploadForm` splitst het bestand in stukken van 16 MB en PUT elk stuk naar `/api/upload/chunk?uploadId&index` (retry per stuk, voortgang via XHR). Max 2 GB (`MAX_UPLOAD_BYTES`).
-2. `/api/upload/complete` controleert of alle stukken binnen zijn, maakt een `Transcript` met `status: 'processing'`, streamt de stukken naar AssemblyAI en start de transcriptie met `webhook_url` = `NEXT_PUBLIC_BASE_URL/api/webhook` (alleen bij https).
+1. `UploadForm` splitst het bestand in stukken van 16 MB en PUT elk stuk naar `/api/upload/chunk?uploadId&index` (retry per stuk, voortgang via XHR); de server streamt elk stuk naar schijf. Max 2 GB (`MAX_UPLOAD_BYTES`); gedeelde constanten in `src/lib/upload-constants.ts` (geen node-imports, ook client-side).
+2. `/api/upload/complete` controleert of alle stukken binnen zijn, streamt ze naar AssemblyAI, start de transcriptie met `webhook_url` = `NEXT_PUBLIC_BASE_URL/api/webhook` (alleen bij https) en maakt dán pas het `Transcript` aan (`status: 'processing'`, met `assemblyId`). Tijdelijke stukken worden bij elke uitkomst opgeruimd.
 3. Resultaat komt binnen via `/api/webhook` (beveiligd met header `x-transcriptie-webhook-secret` = `ASSEMBLYAI_WEBHOOK_SECRET`) óf via polling: `GET /api/transcripts/[id]` haalt de status bij AssemblyAI op zolang hij `processing` is (`syncTranscriptWithAssemblyAI` in `src/lib/assemblyai.ts`). Lokaal (localhost) werkt alleen de polling-route.
 4. `UploadForm`, `TranscriptList` en `TranscriptView` pollen tot `completed`/`error`; daarna start de AI-verwerking.
 

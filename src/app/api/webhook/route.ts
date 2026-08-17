@@ -6,9 +6,11 @@ import { notifyN8N } from '@/lib/webhook'
 // POST /api/webhook — aangeroepen door AssemblyAI zodra een transcriptie klaar is
 export async function POST(request: NextRequest) {
   try {
+    // Fail-closed: zonder geconfigureerd geheim accepteren we geen webhooks
+    // (de polling-fallback in GET /api/transcripts/[id] werkt dan nog steeds)
     const secret = process.env.ASSEMBLYAI_WEBHOOK_SECRET
-    if (secret && request.headers.get(WEBHOOK_HEADER_NAME) !== secret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!secret || request.headers.get(WEBHOOK_HEADER_NAME) !== secret) {
+      return NextResponse.json({ error: 'Niet geautoriseerd' }, { status: 401 })
     }
 
     const body = await request.json()

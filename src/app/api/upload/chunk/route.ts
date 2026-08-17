@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth'
-import { isValidUploadId, MAX_CHUNK_BYTES, MAX_CHUNKS, writeChunk } from '@/lib/uploads'
+import {
+  ChunkTooLargeError,
+  cleanupStaleUploads,
+  isValidUploadId,
+  MAX_CHUNK_BYTES,
+  MAX_CHUNKS,
+  writeChunkFromStream,
+} from '@/lib/uploads'
 
 // PUT /api/upload/chunk?uploadId=…&index=…
-// Ontvangt één stuk van een audiobestand (ruwe bytes in de body) en zet het
-// tijdelijk op schijf. Herhaalbaar: hetzelfde stuk nogmaals sturen overschrijft.
+// Ontvangt één stuk van een audiobestand (ruwe bytes in de body) en streamt
+// het naar schijf. Herhaalbaar: hetzelfde stuk nogmaals sturen overschrijft.
 export async function PUT(request: NextRequest) {
   const authGate = await requireUser()
   if (authGate instanceof NextResponse) return authGate
@@ -25,19 +32,23 @@ export async function PUT(request: NextRequest) {
   if (declared > MAX_CHUNK_BYTES) {
     return NextResponse.json({ error: 'Chunk te groot' }, { status: 413 })
   }
+  if (!request.body) {
+    return NextResponse.json({ error: 'Lege chunk' }, { status: 400 })
+  }
+
+  // Bij het eerste stuk van een nieuwe upload: oude, achtergebleven uploads opruimen
+  if (index === 0) void cleanupStaleUploads()
 
   try {
-    const data = new Uint8Array(await request.arrayBuffer())
-    if (data.byteLength === 0) {
+    const received = await writeChunkFromStream(user.id, uploadId, index, request.body, MAX_CHUNK_BYTES)
+    if (received === 0) {
       return NextResponse.json({ error: 'Lege chunk' }, { status: 400 })
     }
-    if (data.byteLength > MAX_CHUNK_BYTES) {
+    return NextResponse.json({ received })
+  } catch (error) {
+    if (error instanceof ChunkTooLargeError) {
       return NextResponse.json({ error: 'Chunk te groot' }, { status: 413 })
     }
-
-    await writeChunk(user.id, uploadId, index, data)
-    return NextResponse.json({ received: data.byteLength })
-  } catch (error) {
     console.error('Chunk upload error:', error)
     return NextResponse.json({ error: 'Chunk opslaan mislukt' }, { status: 500 })
   }

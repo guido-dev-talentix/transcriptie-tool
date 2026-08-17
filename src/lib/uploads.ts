@@ -1,8 +1,12 @@
-import { createReadStream } from 'node:fs'
-import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Readable } from 'node:stream'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import { CHUNK_SIZE, DEFAULT_MAX_UPLOAD_BYTES } from '@/lib/upload-constants'
+
+export { CHUNK_SIZE, MAX_CHUNK_BYTES, ALLOWED_AUDIO_EXTENSIONS, hasAllowedAudioExtension } from '@/lib/upload-constants'
 
 /**
  * Tijdelijke opslag voor uploads in stukken (chunks).
@@ -17,12 +21,8 @@ import { Readable } from 'node:stream'
  * hele bestand opnieuw moeten sturen. Nu is elke request klein en herhaalbaar.
  */
 
-export const CHUNK_SIZE = 16 * 1024 * 1024 // 16 MB per request
-export const MAX_CHUNK_BYTES = 32 * 1024 * 1024 // harde bovengrens per request
-export const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES) || 2 * 1024 * 1024 * 1024 // 2 GB
+export const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES) || DEFAULT_MAX_UPLOAD_BYTES
 export const MAX_CHUNKS = Math.ceil(MAX_UPLOAD_BYTES / CHUNK_SIZE)
-
-export const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.mp4']
 
 const STALE_UPLOAD_MS = 24 * 60 * 60 * 1000
 
@@ -37,11 +37,6 @@ export function isValidUploadId(id: string | null): id is string {
   return !!id && UPLOAD_ID_RE.test(id)
 }
 
-export function hasAllowedAudioExtension(filename: string): boolean {
-  const lower = filename.toLowerCase()
-  return ALLOWED_AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext))
-}
-
 function uploadDir(userId: string, uploadId: string): string {
   if (!USER_ID_RE.test(userId) || !isValidUploadId(uploadId)) {
     throw new Error('Ongeldige upload-identificatie')
@@ -49,15 +44,47 @@ function uploadDir(userId: string, uploadId: string): string {
   return join(baseDir(), userId, uploadId)
 }
 
-export async function writeChunk(
+export class ChunkTooLargeError extends Error {
+  constructor() {
+    super('Chunk te groot')
+  }
+}
+
+/**
+ * Schrijft een binnenkomend stuk streamend naar schijf (geen buffer van 16 MB in
+ * het geheugen). Boven maxBytes wordt de stream afgebroken en het deelbestand
+ * verwijderd. Geeft het aantal geschreven bytes terug.
+ */
+export async function writeChunkFromStream(
   userId: string,
   uploadId: string,
   index: number,
-  data: Uint8Array
-): Promise<void> {
+  body: ReadableStream<Uint8Array>,
+  maxBytes: number
+): Promise<number> {
   const dir = uploadDir(userId, uploadId)
   await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, String(index)), data)
+  const path = join(dir, String(index))
+
+  let written = 0
+  const limiter = new Transform({
+    transform(chunk: Buffer, _enc, callback) {
+      written += chunk.length
+      if (written > maxBytes) {
+        callback(new ChunkTooLargeError())
+        return
+      }
+      callback(null, chunk)
+    },
+  })
+
+  try {
+    await pipeline(Readable.fromWeb(body as import('node:stream/web').ReadableStream), limiter, createWriteStream(path))
+  } catch (e) {
+    await rm(path, { force: true }).catch(() => {})
+    throw e
+  }
+  return written
 }
 
 /**
@@ -110,7 +137,8 @@ export async function removeUpload(userId: string, uploadId: string): Promise<vo
 
 /**
  * Ruimt achtergebleven uploads (afgebroken browsersessies) ouder dan een dag op.
- * Best effort; wordt aangeroepen bij elke voltooide upload.
+ * Best effort; wordt aangeroepen bij de start van elke nieuwe upload en bij
+ * elke voltooide upload.
  */
 export async function cleanupStaleUploads(): Promise<void> {
   const root = baseDir()

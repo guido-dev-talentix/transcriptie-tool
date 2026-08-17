@@ -3,9 +3,6 @@ import { prisma } from '@/lib/db'
 import { syncTranscriptWithAssemblyAI } from '@/lib/assemblyai'
 import { getTranscriptViewer, canViewTranscript, requireUser } from '@/lib/auth'
 
-// Na zoveel tijd zonder AssemblyAI-id beschouwen we een upload als afgebroken
-const STALE_UPLOAD_MS = 30 * 60 * 1000
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -36,23 +33,12 @@ export async function GET(
     }
 
     // Nog bezig: status bij AssemblyAI ophalen (polling-fallback naast de webhook)
-    if (transcript.status === 'processing' || transcript.status === 'pending') {
-      if (transcript.assemblyId) {
-        const updated = await syncTranscriptWithAssemblyAI({
-          id: transcript.id,
-          assemblyId: transcript.assemblyId,
-        })
-        if (updated) return NextResponse.json(updated)
-      } else if (Date.now() - transcript.createdAt.getTime() > STALE_UPLOAD_MS) {
-        // Upload naar AssemblyAI is nooit afgerond (bijv. server herstart tijdens
-        // het doorsturen) — markeer als fout zodat de UI niet eindeloos blijft pollen
-        const updated = await prisma.transcript.update({
-          where: { id: transcript.id },
-          data: { status: 'error', error: 'Upload is afgebroken. Probeer het bestand opnieuw te uploaden.' },
-          include: { project: { select: { id: true, name: true } } },
-        })
-        return NextResponse.json(updated)
-      }
+    if ((transcript.status === 'processing' || transcript.status === 'pending') && transcript.assemblyId) {
+      const updated = await syncTranscriptWithAssemblyAI({
+        id: transcript.id,
+        assemblyId: transcript.assemblyId,
+      })
+      if (updated) return NextResponse.json(updated)
     }
 
     return NextResponse.json(transcript)
