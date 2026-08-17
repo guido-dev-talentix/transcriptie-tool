@@ -44,6 +44,8 @@ npm run db:studio    # Open Prisma Studio (database GUI)
 
 Waarom chunks: Node kapt één lange request standaard na 300 s af (`server.requestTimeout`) en een haperende verbinding zou anders het hele bestand opnieuw moeten sturen.
 
+**Valkuil:** routes met grote request-bodies (`/api/upload/*`, `/api/upload-pdf`) staan bewust *buiten* de middleware-matcher (`src/middleware.ts`). De Next-middleware kapt bodies af zodra hij zelf iets awaitt (de Supabase-sessiecheck): van 16 MB kwam ~10 MB aan, zonder foutmelding. Nieuwe upload-routes daar ook uitsluiten en zelf `requireUser()` aanroepen.
+
 ### Authentication & Authorization
 - **Middleware** (`src/middleware.ts`): Redirects unauthenticated users to `/login` via Supabase session check. Uitzonderingen zonder sessie: `/api/cli` (Bearer-token), `/api/webhook` (geheime header), `/api/cron` (`CRON_SECRET`), `/api/version` (publiek)
 - **Supabase clients**: Server (`src/lib/supabase/server.ts`) and browser (`src/lib/supabase/client.ts`) — use the correct one based on context
